@@ -25,6 +25,9 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
 - 3D generation and processing: [`meshy`](plugins/meshy) and
   [`tripo`](plugins/tripo) include text/image generation, remeshing, texturing
   and animation (optional Beta, requires OhMyGame API 2.16).
+- Audio generation and transcription: [`elevenlabs`](plugins/elevenlabs), an
+  optional Beta with account voices, speech, sound effects, music and Scribe
+  transcription (requires OhMyGame API 2.21).
 - Messaging connections: [`feishu`](plugins/feishu), an optional private-chat
   bot with an explicit allowed user, durable delivery tracking and approvals
   kept in OhMyGame. Build it with `npm run build:feishu` before local use.
