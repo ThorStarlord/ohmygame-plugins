@@ -25,7 +25,7 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
 - 3D generation and processing: [`meshy`](plugins/meshy) and
   [`tripo`](plugins/tripo) include text/image generation, remeshing, texturing
   and animation (optional Beta, requires OhMyGame API 2.16).
-- Doubao speech: [`doubao-voice`](plugins/doubao-voice), a private Beta preparation
+- Doubao speech: [`doubao-voice`](plugins/doubao-voice), an optional Beta
   for speech synthesis and Seed Audio, requiring host API 2.25.
 - Audio generation and transcription: [`elevenlabs`](plugins/elevenlabs), an
   optional Beta with account voices, speech, sound effects, music and Scribe
