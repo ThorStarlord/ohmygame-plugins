@@ -1,0 +1,11 @@
+{
+  "plugin.name": "PixelLab",
+  "plugin.description": "Create pixel art, characters and animations with your PixelLab account.",
+  "plugin.longDescription": "Pixen pixel art, eight-direction characters and skeleton animations from PixelLab, in the Image node. Characters and animations come back as PixelLab's GIF. Skeleton animation needs one character reference image. Paid jobs resume after a restart; stop ends local waiting, and PixelLab may still finish and charge for the job.",
+  "config.apiKey.title": "PixelLab API key",
+  "config.apiKey.description": "Sent only to api.pixellab.ai.",
+  "provider.pixellab": "PixelLab (plugin)",
+  "model.pixen": "Pixen pixel art",
+  "model.character": "Character (8 directions)",
+  "model.animation": "Skeleton animation"
+}

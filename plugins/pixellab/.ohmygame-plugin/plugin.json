@@ -1,0 +1,68 @@
+{
+  "$schema": "https://www.ohmygame.ai/schema/plugin-2.json",
+  "id": "ohmygame/pixellab",
+  "version": "0.1.0",
+  "engines": {
+    "ohmygame-api": "^2.30.0"
+  },
+  "displayName": "%plugin.name%",
+  "description": "%plugin.description%",
+  "longDescription": "%plugin.longDescription%",
+  "icon": "./assets/icon.svg",
+  "categories": ["provider"],
+  "beta": true,
+  "capabilities": {
+    "network": ["api.pixellab.ai"]
+  },
+  "configuration": {
+    "apiKey": {
+      "type": "secret",
+      "title": "%config.apiKey.title%",
+      "description": "%config.apiKey.description%"
+    }
+  },
+  "contributes": {
+    "providers": [
+      {
+        "id": "pixellab",
+        "title": "%provider.pixellab%",
+        "icon": "./assets/icon.svg",
+        "apiKey": "apiKey",
+        "media": {
+          "adapter": "./media/adapter.js",
+          "image": {
+            "recoverable": true,
+            "maxMinutes": 30,
+            "models": [
+              {
+                "id": "pixen",
+                "title": "%model.pixen%",
+                "resolutions": ["512"],
+                "aspectRatios": ["1:1"],
+                "maxReferenceImages": 0
+              },
+              {
+                "id": "character",
+                "title": "%model.character%",
+                "resolutions": ["512"],
+                "aspectRatios": ["1:1"],
+                "maxReferenceImages": 1,
+                "maxReferenceImageDimension": 256
+              },
+              {
+                "id": "skeleton-animation",
+                "title": "%model.animation%",
+                "resolutions": ["512"],
+                "aspectRatios": ["1:1"],
+                "minReferenceImages": 1,
+                "maxReferenceImages": 1,
+                "maxReferenceImageDimension": 256
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "skills": "./skills/"
+  }
+}
