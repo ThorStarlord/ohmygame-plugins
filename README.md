@@ -17,8 +17,8 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
   [`siliconflow-cn`](plugins/siliconflow-cn), [`modelscope`](plugins/modelscope),
   [`command-code`](plugins/command-code) and [`fal`](plugins/fal) (images, video,
   audio and 3D only).
-- Video generation: [`minimax`](plugins/minimax), an optional beta provider for
-  China and Global accounts (requires OhMyGame API 2.8).
+- Video and speech: [`minimax`](plugins/minimax), an optional Beta with H3 video
+  and Speech 2.8 for separate China/Global accounts (requires OhMyGame API 2.26).
 - Image and video generation: [`seedance`](plugins/seedance) combines Ark
   Seedream images and Seedance videos under one key, with a separate BytePlus
   account (optional Beta, requires OhMyGame API 2.8).
