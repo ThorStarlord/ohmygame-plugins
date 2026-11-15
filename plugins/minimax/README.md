@@ -7,8 +7,9 @@ reference images. The provider and plugin details use the MiniMax logo.
 Version 0.2.0 adds Speech 2.8 HD/Turbo with six reviewed system voice presets,
 speed, pitch, volume and MP3/WAV output. Both regions reuse their existing keys.
 
-This is an optional beta plugin. It needs OhMyGame API 2.26 with durable retry ownership
-([app #848](https://github.com/WhiteTowerAI/ohmygame/pull/848)).
+This is an optional beta plugin. It needs OhMyGame API 2.26 for nested speech
+response decoding ([app #908](https://github.com/WhiteTowerAI/ohmygame/pull/908));
+video task recovery uses the existing durable retry ownership.
 Install it from the plugin catalog in a compatible app. It is not preinstalled.
 Apps with MiniMax migration support can move existing keys, switches, global and
 project defaults, and saved canvas selections to this plugin. Migration requires
@@ -112,7 +113,7 @@ Official speech contracts checked 2026-11-15:
 [account voice query](https://platform.minimax.io/docs/api-reference/voice-management-get).
 Automated checks use synthetic audio and mocked HTTP, not live quality/availability.
 
-## Protocol and release notes
+## Video protocol and release notes
 
 The sandbox cannot read keys or local files. The app adds the selected region's
 Bearer key to API requests and downloads outputs without it. Allowed hosts are
