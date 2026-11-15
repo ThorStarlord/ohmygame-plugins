@@ -39,6 +39,9 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
 - Local image workflows: [`comfyui`](plugins/comfyui), an optional Beta for
   an existing local server, API-format workflow import and durable image recovery
   (requires host API 2.31).
+- Local reference speech: [`gpt-sovits`](plugins/gpt-sovits), an optional Beta
+  for an existing GPT-SoVITS server and a configured reference voice, with WAV
+  output and saved-result recovery (requires host API 2.32).
 - Messaging connections: [`feishu`](plugins/feishu), an optional private-chat
   bot with an explicit allowed user, durable delivery tracking and approvals
   kept in OhMyGame. Build it with `npm run build:feishu` before local use.
