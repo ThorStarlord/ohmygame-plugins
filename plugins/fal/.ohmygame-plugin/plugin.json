@@ -2,7 +2,7 @@
   "$schema": "https://www.ohmygame.ai/schema/plugin-2.json",
   "id": "ohmygame/fal",
   "beta": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "engines": {
     "ohmygame-api": "^2.27.0"
   },
@@ -190,6 +190,19 @@
                 ],
                 "minDurationSeconds": 1,
                 "maxDurationSeconds": 47
+              },
+              {
+                "id": "stable-audio-25",
+                "title": "Stable Audio 2.5",
+                "kinds": [
+                  "sound-effect",
+                  "music"
+                ],
+                "formats": [
+                  "wav"
+                ],
+                "minDurationSeconds": 1,
+                "maxDurationSeconds": 190
               }
             ]
           },

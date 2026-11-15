@@ -12,6 +12,7 @@ pictures, videos, audio and 3D models. It has no chat models.
 | Video | Kling O3 (`fal-ai/kling-video/o3/standard/image-to-video`) | A first frame, an optional last frame, and 3, 5, 10 or 15 seconds |
 | Speech | MiniMax Speech-02 HD (`fal-ai/minimax/speech-02-hd`) | Up to 5,000 characters, in one of MiniMax's voices, as MP3 |
 | Sound effects, music | Stable Audio (`fal-ai/stable-audio`) | A description and up to 47 seconds, as WAV |
+| Sound effects, music | Stable Audio 2.5 (`stable-audio-25`) | A description and 1–190 whole seconds, as WAV |
 | 3D | TRELLIS (`fal-ai/trellis`) | One picture of the object, as GLB |
 
 Generation models are on from the start. Background removal has its own processing picker and does not change the default image model. To use more of fal.ai's models, open the fal.ai
@@ -28,9 +29,52 @@ fal.ai's files are on, and OhMyGame adds the key to its requests. A video,
 audio file or 3D model a restart cut off is checked again on **Retry**, not
 paid for twice. fal.ai bills each request to your account.
 
-Needs OhMyGame with plugin API 2.27.0 or later. Version 0.3.0 remains Beta.
+Needs OhMyGame with plugin API 2.27.0 or later. Version 0.4.0 remains Beta.
 
 Published as `@ohmygame/fal` from [ohmygame-plugins](https://github.com/WhiteTowerAI/ohmygame-plugins).
+
+## Stable Audio 2.5
+
+Choose **Stable Audio 2.5** on an audio node for music or sound effects. It uses
+the existing fal key and permissions, and the
+[official text-to-audio queue](https://fal.ai/models/fal-ai/stable-audio-25/text-to-audio/api).
+Set a whole number of seconds from 1 to 190. If no duration is supplied, the
+vendor's 190-second default is used. Output is WAV; this endpoint has no MP3,
+reference-audio editing, dedicated loop or instrumental-only control. Describe
+the desired sound in the prompt; a prompt is not a guarantee of seamless loops
+or absence of vocals.
+
+The original 47-second Stable Audio preset and all existing selections remain.
+The new preset uses a separate local ID so it cannot replace a previously
+enabled, saved `fal-ai/stable-audio-25/text-to-audio` discovery definition or its
+pending task. Newly discovered definitions for that endpoint correctly list WAV.
+If you previously enabled it with the older MP3 display, finish its pending jobs
+first, then use the new preset; do not change a pending job's model or format.
+Merely loading models does not rewrite your enabled definitions.
+
+New 2.5 jobs retain queue history (`sync_mode: false`). **Stop** stops local
+waiting without withdrawing the remote job; **Retry** follows the same result.
+Restarting the app or retrying a failed download also keeps its saved task.
+A lost submission response is reported as uncertain and is never automatically
+submitted again. If fal no longer has the task or output, check its history before
+explicitly starting new work. This does not extend fal's retention period.
+Tasks created by an older plugin retain their original cancellation behavior.
+
+### Local audio acceptance
+
+- Upgrade and confirm the key, switch, old Stable Audio selection and hidden
+  models remain. Select Stable Audio 2.5 explicitly and generate a short sound
+  effect and music clip; check WAV playback and requested duration. A long clip
+  may incur more cost; choose 190 seconds only when you want one.
+- Stop a queued 2.5 job, then Retry; also quit/reopen and Retry. Confirm the same
+  request in fal history and no second submission. Repeat after a failed output
+  download, keeping the original node/model.
+- Check rejection of MP3 and fractional/out-of-range duration before submission.
+  Load audio models and confirm newly enabled 2.5 discovery reports WAV.
+
+Tests use the real OhMyGame host, sandbox and task journal with simulated queue
+responses and a synthetic WAV. Real generation, sound quality and duration need
+local acceptance; the fixture's short silence is not a 190-second vendor result.
 
 ## Background removal
 
