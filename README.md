@@ -30,6 +30,9 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
 - Audio generation and transcription: [`elevenlabs`](plugins/elevenlabs), an
   optional Beta with account voices, speech, sound effects, music and Scribe
   transcription (requires OhMyGame API 2.21).
+- Character speech: [`fish-audio`](plugins/fish-audio), an optional Beta with
+  S2.1 Pro / Pro Free, workspace/public voice search and MP3/WAV output
+  (requires host API 2.25).
 - Messaging connections: [`feishu`](plugins/feishu), an optional private-chat
   bot with an explicit allowed user, durable delivery tracking and approvals
   kept in OhMyGame. Build it with `npm run build:feishu` before local use.
