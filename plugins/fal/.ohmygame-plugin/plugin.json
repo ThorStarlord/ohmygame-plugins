@@ -2,9 +2,9 @@
   "$schema": "https://www.ohmygame.ai/schema/plugin-2.json",
   "id": "ohmygame/fal",
   "beta": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "engines": {
-    "ohmygame-api": "^2.5.0"
+    "ohmygame-api": "^2.27.0"
   },
   "displayName": "%plugin.name%",
   "description": "%plugin.description%",
@@ -61,7 +61,11 @@
                 ],
                 "maxReferenceImages": 0
               }
-            ]
+            ],
+            "backgroundRemoval": {
+              "id": "fal-ai/birefnet",
+              "title": "BiRefNet"
+            }
           },
           "video": {
             "discoverModels": true,

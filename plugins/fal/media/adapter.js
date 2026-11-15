@@ -499,7 +499,22 @@ async function listModels(kind, host) {
 export default {
   image: {
     models: (host) => listModels("image", host),
-    start(input, host) {
+    async start(input, host) {
+      if (input.operation === "remove-background") {
+        if (input.model !== "fal-ai/birefnet" || !input.image || typeof input.image.file !== "string")
+          return { error: "Choose BiRefNet and one source image" };
+        const result = await submit("fal-ai/birefnet", {
+          image_url: { $mediaFile: input.image.file },
+          model: "General Use (Light)",
+          operating_resolution: "1024x1024",
+          output_format: "png",
+          sync_mode: false,
+          refine_foreground: false,
+        }, host, [["image", "url"]]);
+        // Stop waiting locally while preserving queue ownership for Retry.
+        if (result.task) delete result.task.cancel;
+        return result;
+      }
       if (input.modelData) return startListed("image", input, host);
       return submit(input.model, {
         prompt: input.prompt,
