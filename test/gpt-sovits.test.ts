@@ -129,6 +129,7 @@ it("uses the configured reference on the exact local server and preserves WAV by
     ["reference-speech"],
   );
   assert.deepEqual(catalog.models[0]!.capabilities.formats, ["wav"]);
+  assert.deepEqual(catalog.models[0]!.capabilities.languages, ["zh", "en", "ja"]);
   const manifest = s.services.index.get(pluginId)!.manifest;
   assert.equal(manifest.beta, true);
   assert.deepEqual(manifest.engines, { "ohmygame-api": "^2.32.0" });

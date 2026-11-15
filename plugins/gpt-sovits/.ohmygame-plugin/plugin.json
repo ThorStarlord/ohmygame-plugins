@@ -66,6 +66,7 @@
                 "kinds": ["speech"],
                 "readsText": true,
                 "formats": ["wav"],
+                "languages": ["zh", "en", "ja"],
                 "maxTextCharacters": 2000,
                 "speedRange": [-50, 100]
               }
