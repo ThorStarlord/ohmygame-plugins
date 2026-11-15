@@ -36,6 +36,9 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
 - Character speech: [`fish-audio`](plugins/fish-audio), an optional Beta with
   S2.1 Pro / Pro Free, workspace/public voice search and MP3/WAV output
   (requires host API 2.25).
+- Local image workflows: [`comfyui`](plugins/comfyui), an optional Beta for
+  an existing local server, API-format workflow import and durable image recovery
+  (requires host API 2.31).
 - Messaging connections: [`feishu`](plugins/feishu), an optional private-chat
   bot with an explicit allowed user, durable delivery tracking and approvals
   kept in OhMyGame. Build it with `npm run build:feishu` before local use.
