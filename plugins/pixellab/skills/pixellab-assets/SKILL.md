@@ -26,7 +26,9 @@ separate frames or pose data; the app does not split or rebuild it.
 
 A reference works best as one complete character on a transparent background.
 The app scales references larger than 256×256 down with hard pixel edges
-before sending them; the canvas keeps the original.
+before sending them; the canvas keeps the original. A GIF used as a reference,
+such as a Character result, is sent as its first frame, so prefer a still,
+south-facing picture of the character for Skeleton animation.
 
 Each generation is a paid PixelLab job. After a failure, use the saved job's
 Retry instead of generating again, so the original job is checked.
