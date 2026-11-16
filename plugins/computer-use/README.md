@@ -13,8 +13,9 @@ preinstalled and has no app-wide background connection or cross-project session 
 ## Set up
 
 1. Use desktop **Beta 5.8 or newer** (minimum plugin API **2.7**).
-2. Install Node.js **22.19+** with npm. `npx` must be on the PATH available to
-   OhMyGame; restart the desktop app after installing Node.js.
+2. The desktop package includes Node.js and npm for the plugin. For a source
+   development build, install Node.js **22.19+** with npm and make `npx` available
+   on its PATH; restart the development app after installing Node.js.
 3. Install **Computer Use** from **Plugins → Discover**. For source development,
    run `npm ci` and `npm run build:computer-use`, then add `plugins/computer-use`
    through **This computer** with **Develop** on.
