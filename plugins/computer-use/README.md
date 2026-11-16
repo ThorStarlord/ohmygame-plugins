@@ -1,20 +1,24 @@
 # Computer Use
 
-An optional OhMyGame plugin for inspecting and operating desktop applications.
+An optional Beta plugin for inspecting and operating desktop applications.
+Use [OhMyGame Beta 5.8 or newer](https://github.com/WhiteTowerAI/ohmygame/releases)
+and install **Computer Use** from Plugins → Discover. macOS has passed local
+acceptance; Windows/Linux are included as unverified Beta targets. Their real
+screen capture, input and OS permission flows still need local acceptance.
 On macOS, approve an app once with **Allow and remember**, or choose **Allow once**.
 Revoke saved access in **Plugins → Computer Use → Settings**. Windows/Linux retain
 per-call approval until the runtime offers unambiguous app identities. It is not
 preinstalled and has no app-wide background connection or cross-project session access.
 
-## Try locally
+## Set up
 
-1. Use an OhMyGame build with plugin API **2.7 or newer** ([app #822](https://github.com/WhiteTowerAI/ohmygame/pull/822) is merged into `dev`; use that branch until a compatible app release is available).
+1. Use desktop **Beta 5.8 or newer** (minimum plugin API **2.7**).
 2. Install Node.js **22.19+** with npm. `npx` must be on the PATH available to
    OhMyGame; restart the desktop app after installing Node.js.
-3. In this repository, run `npm ci` and `npm run build:computer-use`.
-4. In OhMyGame, open **Plugins → Add plugin → This computer**, select this
-   `plugins/computer-use` folder with **Develop** on, review its native/process
-   access. Turn **Every project** off for a project-only test, then enable it
+3. Install **Computer Use** from **Plugins → Discover**. For source development,
+   run `npm ci` and `npm run build:computer-use`, then add `plugins/computer-use`
+   through **This computer** with **Develop** on.
+4. Review its native/process access. Turn **Every project** off for a project-only test, then enable it
    in the test project’s **Project plugins** panel.
 5. Open a disposable document in a desktop app, then ask the agent to inspect
    that app. Review the app and arguments before approving. Reject the first
@@ -123,10 +127,13 @@ boundaries, not containment of a compromised executable or other shell tools.
 actual manifest resolution, approval gate and a fixture MCP server, plus forged
 window ownership, catalog filtering and target validation. The fixture
 records calls and never controls a real desktop. Platform permissions, screen
-capture and input must still be tested locally on each target OS before release.
+capture and input require separate real-system acceptance.
 
-The package is deliberately `private: true`. Remove that flag in a release PR
-only after compatible OhMyGame builds ship and target-platform testing passes.
+Release 0.1.0 is a public Beta for the compatible Beta 5.8 desktop host. The
+maintainer accepted macOS locally and explicitly approved including Windows/Linux
+as unverified Beta targets on 2026-11-16. Do not infer their acceptance from
+fixture tests or upstream support. Keep per-call approval on these systems;
+complete their native acceptance before describing them as verified.
 For a runtime update, review upstream tool schemas, startup/shutdown, permissions
 and environment switches; keep the version pinned and rerun the approval and
 package checks. The qualified MCP server name follows the host API 2.x contract
@@ -134,12 +141,13 @@ and is checked against `PluginServices`; revisit it if that host contract change
 
 ## 本地验收（macOS）
 
-需要包含 [#822](https://github.com/WhiteTowerAI/ohmygame/pull/822) 的应用 **`dev` 分支（插件 API 2.7）**。
-插件仍未发布，使用本仓库中的 `plugins/computer-use`。仓库已有依赖时，
-执行 `npm run build:computer-use`；全新工作区先执行 `npm ci`。
+需要 **OhMyGame Beta 5.8 或更新版本**，从插件市场安装 **电脑操作**。
+macOS 已完成本地验收；Windows/Linux 作为尚未真机验收的 Beta 一并发布，
+仍逐次确认。源码开发可使用本仓库的 `plugins/computer-use`；先执行
+`npm ci` 和 `npm run build:computer-use`。
 
-1. 在 **插件 → 添加插件 → 本机** 选择 `plugins/computer-use` 文件夹，开启
-   **开发模式**。确认插件页和列表显示蓝色显示器与光标图标。仅测试一个项目时，
+1. 从插件市场安装；源码开发才使用 **插件 → 添加插件 → 本机**，选择
+   `plugins/computer-use` 并开启 **开发模式**。确认插件页和列表显示图标。仅测试一个项目时，
    关闭 **所有项目**，在测试项目的 **项目插件** 中开启它。
 2. 开发页 **检查结果 → 桌面 → 测试** 应连接并列出 12 个工具。这个检查不代表
    macOS 已授权。原有辅助功能、屏幕录制授权有效时，无需重配；缺权限再使用上面的

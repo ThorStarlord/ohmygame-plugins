@@ -1,10 +1,11 @@
 # Feishu
 
 An optional OhMyGame plugin for a private conversation with your own Feishu
-bot. It is not preinstalled. Requires plugin API **2.6** from
-[OhMyGame PR #820](https://github.com/WhiteTowerAI/ohmygame/pull/820), including
-the session service from #819. Install/update the app before this plugin.
-The plugin manifest prevents API 2.5 hosts from activating this version.
+bot. This is a Beta plugin and is not preinstalled. Use
+[OhMyGame Beta 5.8 or newer](https://github.com/WhiteTowerAI/ohmygame/releases),
+then install **Feishu** from Plugins → Discover. Its minimum plugin API is **2.6**;
+older hosts cannot activate it. Existing local settings and bindings stay with
+the same plugin ID when updating to the published package.
 
 ## Set up
 
@@ -201,12 +202,11 @@ with Develop on. The build bundles the pinned official Node SDK and includes
 its dependency licenses; the installed app runs no package installation.
 The test/publish workflows build the same artifact before packing it.
 
-Rollout: requires the API 2.6 host from app #820. CI follows app `dev` after
-that merge. This package is temporarily `private: true`, so merging it does not
-publish an unusable version for current API 2.4 app releases. Once API 2.6
-app builds have shipped, remove `private` in a release PR and run the plugin
-checks before publishing. The publish workflow skips private packages; local
-folder installation and packing for tests still work.
+Release 0.1.0 carries `beta: true` and targets the compatible Beta 5.8 desktop
+release. Build and test before packing; npm includes the native bundle, license
+notices, icon, locales and this setup guide. It does not install dependencies
+on the user's computer. Keep the manifest API requirement and release notes
+aligned when host capabilities change.
 
 Tests also exercise the official registration protocol with a local adapter, minimal preset encoding, cancellation/expiry, identity binding and secret-free status. No test creates a real tenant app.
 
