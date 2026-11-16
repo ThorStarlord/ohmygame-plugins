@@ -239,6 +239,6 @@ it("shows PixelLab's error and refuses an animation without a reference", async 
       undefined,
       { journal: await s.journal("no-reference") },
     ),
-    /needs one character reference image/,
+    /requires at least 1 reference image/,
   );
 });
