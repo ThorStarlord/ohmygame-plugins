@@ -114,13 +114,13 @@ it("declares beta image models with their reference rules", async (t) => {
   const s = await setup(t);
   assert.deepEqual(
     ["pixen", "character", "skeleton-animation"].map((id) => {
-      const { maxReferenceImages, minReferenceImages } = s.model(id);
-      return { id, maxReferenceImages, minReferenceImages };
+      const { maxReferenceImages, minReferenceImages, promptOptionalWithReference } = s.model(id);
+      return { id, maxReferenceImages, minReferenceImages, promptOptionalWithReference };
     }),
     [
-      { id: "pixen", maxReferenceImages: 0, minReferenceImages: undefined },
-      { id: "character", maxReferenceImages: 1, minReferenceImages: undefined },
-      { id: "skeleton-animation", maxReferenceImages: 1, minReferenceImages: 1 },
+      { id: "pixen", maxReferenceImages: 0, minReferenceImages: undefined, promptOptionalWithReference: undefined },
+      { id: "character", maxReferenceImages: 1, minReferenceImages: undefined, promptOptionalWithReference: true },
+      { id: "skeleton-animation", maxReferenceImages: 1, minReferenceImages: 1, promptOptionalWithReference: undefined },
     ],
   );
 });
@@ -141,6 +141,25 @@ it("makes Pixen art in one submitted request", async (t) => {
     image_size: { width: 512, height: 512 },
     no_background: true,
   });
+});
+
+it("uses a connected character reference when its description is empty", async (t) => {
+  const s = await setup(t);
+  const reference = await sharp({
+    create: { width: 128, height: 128, channels: 4, background: "#336699" },
+  })
+    .png()
+    .toBuffer();
+  await s.media.generateImage(
+    s.model("character"),
+    { prompt: "", images: [{ mediaType: "image/png", data: reference.toString("base64") }] },
+    undefined,
+    { journal: await s.journal() },
+  );
+  assert.equal(
+    s.requests.find((request) => request.url === `${API}/create-character-v3`)?.body?.description,
+    "the character in the reference image",
+  );
 });
 
 it("animates a scaled reference and downloads the GIF with the key", async (t) => {
@@ -239,6 +258,6 @@ it("shows PixelLab's error and refuses an animation without a reference", async 
       undefined,
       { journal: await s.journal("no-reference") },
     ),
-    /requires at least 1 reference image/,
+    /Skeleton animation needs one character reference image/,
   );
 });

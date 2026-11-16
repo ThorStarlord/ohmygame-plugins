@@ -19,12 +19,13 @@ including the GIF download, which PixelLab serves only to the key holder.
 | Model | Input | Result |
 |---|---|---|
 | Pixen pixel art | Description; optional transparent background | 512×512 PNG |
-| Character (8 directions) | Description; optional reference image | GIF turning through 8 directions |
+| Character (8 directions) | Description, or one reference image | GIF turning through 8 directions |
 | Skeleton animation | Motion description; one required reference image | South-facing animation GIF |
 
 References larger than 256×256 are scaled down by the app with
 nearest-neighbour sampling before they reach PixelLab. The canvas keeps the
-original picture.
+original picture. With a character reference connected, its description is
+optional: the plugin uses the reference as the character subject.
 
 Every request is a paid PixelLab job, recorded with `host.submit`. After a
 restart, retry checks the original job; a lost submission response is not
