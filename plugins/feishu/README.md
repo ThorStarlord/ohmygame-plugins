@@ -4,8 +4,17 @@ An optional OhMyGame plugin for a private conversation with your own Feishu
 bot. This is a Beta plugin and is not preinstalled. Use
 [OhMyGame Beta 5.8 or newer](https://github.com/WhiteTowerAI/ohmygame/releases),
 then install **Feishu** from Plugins → Discover. Its minimum plugin API is **2.6**;
-older hosts cannot activate it. Existing local settings and bindings stay with
-the same plugin ID when updating to the published package.
+older hosts cannot activate it.
+
+Publication is currently on hold; Beta 5.8 and this npm package are release
+preparation, not available downloads. Use the current OhMyGame `dev` and the
+local development installation below for testing.
+
+A development folder and an npm package are different installation sources.
+If their contents differ, the host requires uninstalling before changing source;
+the same plugin ID does not guarantee that settings, bindings or grants transfer.
+Keep an existing development installation until a reviewed preservation path and
+upgrade acceptance are available. Do not uninstall a working bot to test this draft.
 
 ## Set up
 

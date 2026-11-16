@@ -10,6 +10,14 @@ Revoke saved access in **Plugins → Computer Use → Settings**. Windows/Linux 
 per-call approval until the runtime offers unambiguous app identities. It is not
 preinstalled and has no app-wide background connection or cross-project session access.
 
+Publication is currently on hold; Beta 5.8 and this npm package are release
+preparation, not available downloads. Use the current OhMyGame `dev` and the
+local development installation below for testing. Keep an existing development
+installation: changing from a folder to npm with different contents requires
+uninstalling, and the same plugin ID does not guarantee that saved access or
+settings transfer. A reviewed preservation path and upgrade acceptance are still
+required before that transition.
+
 ## Set up
 
 1. Use desktop **Beta 5.8 or newer** (minimum plugin API **2.7**).
