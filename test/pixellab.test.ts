@@ -20,10 +20,10 @@ const pluginRoot = fileURLToPath(
   new URL("../plugins/pixellab", import.meta.url),
 );
 const API = "https://api.pixellab.ai/v2";
-const PNG = Buffer.concat([
-  Buffer.from("89504e470d0a1a0a", "hex"),
-  Buffer.alloc(16),
-]);
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
 const GIF = Buffer.concat([Buffer.from("GIF89a"), Buffer.alloc(16)]);
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -224,7 +224,8 @@ it("generates ordinary frame animation from a reference and action", async (t) =
     undefined,
     { journal: await s.journal("frame-animation") },
   );
-  assert.deepEqual(frames, { bytes: PNG, mediaType: "image/png" });
+  assert.equal(frames.mediaType, "image/gif");
+  assert.equal(frames.bytes.subarray(0, 6).toString("ascii"), "GIF89a");
   const request = s.requests.find((r) => r.url === `${API}/animate-with-text-v3`)!;
   assert.equal(request.headers.get("authorization"), "Bearer pl-test-key");
   assert.equal(request.body?.action, "run in place");
