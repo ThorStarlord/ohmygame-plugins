@@ -59,7 +59,7 @@ async function character(input, host, description, action) {
     method: "POST",
     auth: true,
     json: {
-      description,
+      description: description || REFERENCE,
       n_directions: 8,
       no_background: true,
       ...(reference ? { reference_image: { type: "base64", base64: `data:${reference.mediaType};base64,${reference.base64}` } } : {}),
