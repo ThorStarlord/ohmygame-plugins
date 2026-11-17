@@ -30,7 +30,7 @@ script is needed for these packaging checks.
 ## Cutover sequence
 
 1. The 12 packages are released for the reviewed app cutover. Feishu and Computer
-   Use retain their independent publication holds. Do not add these packages
+   Use are separate optional Beta releases for desktop Beta 5.8 or newer. Do not add these packages
    over bundled copies in an everyday app profile.
 2. Add npm support to the app's prepared-plugin lock and loader. Pin exact
    versions and SHA-512 tarball integrity; validate the package and manifest ID
