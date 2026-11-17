@@ -6,15 +6,15 @@ bot. This is a Beta plugin and is not preinstalled. Use
 then install **Feishu** from Plugins → Discover. Its minimum plugin API is **2.6**;
 older hosts cannot activate it.
 
-Publication is currently on hold; Beta 5.8 and this npm package are release
-preparation, not available downloads. Use the current OhMyGame `dev` and the
-local development installation below for testing.
+Public desktop Beta 5.7 is too old for this package. Until a compatible desktop
+build is available from Releases, use the current OhMyGame `dev` desktop build.
+公开的 Beta 5.7 不兼容；新版桌面安装包可用前，请使用当前 `dev` 的桌面开发版。
 
 A development folder and an npm package are different installation sources.
 If their contents differ, the host requires uninstalling before changing source;
 the same plugin ID does not guarantee that settings, bindings or grants transfer.
 Keep an existing development installation until a reviewed preservation path and
-upgrade acceptance are available. Do not uninstall a working bot to test this draft.
+upgrade acceptance are available. Keep a working bot installed while testing the npm package in a separate profile.
 
 ## Set up
 

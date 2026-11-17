@@ -10,13 +10,13 @@ Revoke saved access in **Plugins → Computer Use → Settings**. Windows/Linux 
 per-call approval until the runtime offers unambiguous app identities. It is not
 preinstalled and has no app-wide background connection or cross-project session access.
 
-Publication is currently on hold; Beta 5.8 and this npm package are release
-preparation, not available downloads. Use the current OhMyGame `dev` and the
-local development installation below for testing. Keep an existing development
-installation: changing from a folder to npm with different contents requires
-uninstalling, and the same plugin ID does not guarantee that saved access or
-settings transfer. A reviewed preservation path and upgrade acceptance are still
-required before that transition.
+Public desktop Beta 5.7 is too old for this package. Until a compatible desktop
+build is available from Releases, use the current OhMyGame `dev` desktop build.
+
+Keep an existing development installation: changing from a folder to npm with
+different contents requires uninstalling, and the same plugin ID does not
+guarantee that saved access or settings transfer. A reviewed preservation path
+and upgrade acceptance are still required before that transition.
 
 ## Set up
 
@@ -138,7 +138,7 @@ window ownership, catalog filtering and target validation. The fixture
 records calls and never controls a real desktop. Platform permissions, screen
 capture and input require separate real-system acceptance.
 
-Release 0.1.0 is a public Beta for the compatible Beta 5.8 desktop host. The
+Release 0.1.0 is a public Beta for compatible desktop hosts. The
 maintainer accepted macOS locally and explicitly approved including Windows/Linux
 as unverified Beta targets on 2026-11-16. Do not infer their acceptance from
 fixture tests or upstream support. Keep per-call approval on these systems;
@@ -151,6 +151,7 @@ and is checked against `PluginServices`; revisit it if that host contract change
 ## 本地验收（macOS）
 
 需要 **OhMyGame Beta 5.8 或更新版本**，从插件市场安装 **电脑操作**。
+公开的 Beta 5.7 不兼容；新版桌面安装包可用前，请使用当前 `dev` 的桌面开发版。
 macOS 已完成本地验收；Windows/Linux 作为尚未真机验收的 Beta 一并发布，
 仍逐次确认。源码开发可使用本仓库的 `plugins/computer-use`；先执行
 `npm ci` 和 `npm run build:computer-use`。
