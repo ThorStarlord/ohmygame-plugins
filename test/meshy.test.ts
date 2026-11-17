@@ -502,7 +502,7 @@ it("lists actions and credits without paid requests and rejects malformed vendor
           sub_category: "Walk",
           preview_url: invalid
             ? "https://evil.example/preview.mp4"
-            : "https://assets.meshy.ai/walk.mp4",
+            : "https://cdn.meshy.ai/webapp-assets/feature-demo/animation/preview/biped/Walking_Woman.gif",
         },
       ]);
   });
@@ -516,7 +516,7 @@ it("lists actions and credits without paid requests and rejects malformed vendor
       name: "Walk",
       category: "Walking",
       subCategory: "Walk",
-      previewUrl: "https://assets.meshy.ai/walk.mp4",
+      previewUrl: "https://cdn.meshy.ai/webapp-assets/feature-demo/animation/preview/biped/Walking_Woman.gif",
     },
   ]);
   invalid = true;
