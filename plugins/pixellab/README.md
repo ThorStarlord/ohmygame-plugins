@@ -1,7 +1,7 @@
 # PixelLab (Beta)
 
 An optional OhMyGame plugin for [PixelLab](https://www.pixellab.ai/) pixel art,
-characters and frame and skeleton animations. Requires OhMyGame plugin API **2.33**. It is
+characters and frame and skeleton animations. Requires OhMyGame plugin API **2.34**. It is
 not preinstalled; add it from the plugin market.
 
 ## Connect
