@@ -7,5 +7,6 @@
   "provider.pixellab": "PixelLab（插件）",
   "model.pixen": "Pixen 像素画",
   "model.character": "角色（八方向）",
-  "model.animation": "骨骼动画"
+  "model.animation": "骨骼动画",
+  "model.frameAnimation": "普通帧动画"
 }

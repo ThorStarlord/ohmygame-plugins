@@ -1,7 +1,7 @@
 # PixelLab (Beta)
 
 An optional OhMyGame plugin for [PixelLab](https://www.pixellab.ai/) pixel art,
-characters and skeleton animations. Requires OhMyGame plugin API **2.30**. It is
+characters and frame and skeleton animations. Requires OhMyGame plugin API **2.33**. It is
 not preinstalled; add it from the plugin market.
 
 ## Connect
@@ -20,6 +20,7 @@ including the GIF download, which PixelLab serves only to the key holder.
 |---|---|---|
 | Pixen pixel art | Description; optional transparent background | 512×512 PNG |
 | Character (8 directions) | Description, or one reference image | GIF turning through 8 directions |
+| Frame animation | One reference image and a motion description | PixelLab's generated frame sequence |
 | Skeleton animation | Motion description; one required reference image | South-facing animation GIF |
 
 References larger than 256×256 are scaled down by the app with
@@ -37,7 +38,8 @@ charge for it. Waiting is bounded at 30 minutes.
 1. Generate Pixen art with and without a transparent background.
 2. Create a character with only a description, then with a large reference;
    check that the GIF downloads and plays on the canvas.
-3. Try Skeleton animation without a reference (generation stays disabled), then
+3. Try Frame animation with a reference and a motion such as `run in place`, then
+   Skeleton animation without a reference (generation stays disabled), then
    with one character reference and a motion such as `walk in place`.
 4. Quit while a character job runs, reopen, retry: PixelLab should show one job.
 5. Check wrong-key, out-of-credit and failed-job messages.

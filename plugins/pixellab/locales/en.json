@@ -7,5 +7,6 @@
   "provider.pixellab": "PixelLab (plugin)",
   "model.pixen": "Pixen pixel art",
   "model.character": "Character (8 directions)",
-  "model.animation": "Skeleton animation"
+  "model.animation": "Skeleton animation",
+  "model.frameAnimation": "Frame animation"
 }

@@ -10,6 +10,7 @@ export default {
     async start(input, host) {
       if (input.model === "pixen") return pixen(input, host);
       if (input.model === "character") return character(input, host, input.prompt, null);
+      if (input.model === "frame-animation") return frameAnimation(input, host);
       if (input.model === "skeleton-animation") {
         if (input.references?.length !== 1) return { error: "Skeleton animation needs one character reference image" };
         return character(input, host, REFERENCE, input.prompt);
@@ -19,6 +20,16 @@ export default {
     async check(task, host) {
       const job = await status(task.jobId, host);
       if (job.error || !job.done) return job.error ? job : { task, retryAfter: 3 };
+      if (task.phase === "frame-animation") {
+        const images = Array.isArray(job.lastResponse?.images) ? job.lastResponse.images : [];
+        const outputs = images.flatMap((image) => {
+          const value = image?.base64;
+          if (typeof value !== "string") return [];
+          const match = value.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
+          return [{ base64: match?.[2] ?? value, mediaType: match?.[1] ?? "image/png" }];
+        });
+        return outputs.length ? { outputs } : { error: "PixelLab returned no animation frames" };
+      }
       if (task.phase === "character" && task.action) {
         const response = await host.submit("animation", `${API}/characters/animations`, {
           method: "POST",
@@ -52,6 +63,26 @@ async function pixen(input, host) {
     : { error: "PixelLab returned no image" };
 }
 
+async function frameAnimation(input, host) {
+  const reference = input.references?.[0];
+  if (!reference) return { error: "Frame animation needs one reference image" };
+  const response = await host.submit("animation", `${API}/animate-with-text-v3`, {
+    method: "POST",
+    auth: true,
+    json: {
+      first_frame: { base64: `data:${reference.mediaType};base64,${reference.base64}` },
+      action: input.prompt,
+      frame_count: 8,
+      no_background: input.transparentBackground === true,
+    },
+  });
+  if (!response.ok) return { error: await detail(response) };
+  const job = await response.json();
+  return typeof job.background_job_id === "string"
+    ? { task: { phase: "frame-animation", jobId: job.background_job_id }, retryAfter: 3 }
+    : { error: "PixelLab returned no animation job" };
+}
+
 /** Starts a character; with an action, the animation follows once it is ready. */
 async function character(input, host, description, action) {
   const reference = input.references?.[0];
@@ -75,7 +106,7 @@ async function status(jobId, host) {
   const response = await host.fetch(`${API}/background-jobs/${encodeURIComponent(jobId)}`, { auth: true });
   if (!response.ok) return { error: await detail(response) };
   const job = await response.json();
-  if (job.status === "completed") return { done: true };
+  if (job.status === "completed") return { done: true, lastResponse: job.last_response };
   if (job.status === "failed" || job.status === "cancelled") return { error: `PixelLab job failed: ${message(job.last_response?.detail) ?? "no reason given"}` };
   return { done: false };
 }

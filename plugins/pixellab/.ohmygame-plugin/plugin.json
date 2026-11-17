@@ -58,6 +58,15 @@
                 "minReferenceImages": 1,
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 256
+              },
+              {
+                "id": "frame-animation",
+                "title": "%model.frameAnimation%",
+                "resolutions": ["512"],
+                "aspectRatios": ["1:1"],
+                "minReferenceImages": 1,
+                "maxReferenceImages": 1,
+                "maxReferenceImageDimension": 256
               }
             ]
           }
