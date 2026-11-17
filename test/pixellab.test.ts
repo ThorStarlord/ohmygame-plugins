@@ -224,11 +224,8 @@ it("generates ordinary frame animation from a reference and action", async (t) =
     undefined,
     { journal: await s.journal("frame-animation") },
   );
-  // GIF composition is a host concern. The plugin test also runs against the
-  // current dev host, which may still expose the first frame as a PNG until
-  // the host-side multi-frame result change lands.
-  assert.ok(frames.mediaType === "image/png" || frames.mediaType === "image/gif");
-  if (frames.mediaType === "image/gif") assert.equal(frames.bytes.subarray(0, 6).toString("ascii"), "GIF89a");
+  assert.equal(frames.mediaType, "image/gif");
+  assert.equal(frames.bytes.subarray(0, 6).toString("ascii"), "GIF89a");
   const request = s.requests.find((r) => r.url === `${API}/animate-with-text-v3`)!;
   assert.equal(request.headers.get("authorization"), "Bearer pl-test-key");
   assert.equal(request.body?.action, "run in place");
