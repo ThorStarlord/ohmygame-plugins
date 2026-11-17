@@ -3,7 +3,7 @@
   "id": "ohmygame/pixellab",
   "version": "0.1.1",
   "engines": {
-    "ohmygame-api": "^2.33.0"
+    "ohmygame-api": "^2.34.0"
   },
   "displayName": "%plugin.name%",
   "description": "%plugin.description%",
@@ -66,7 +66,8 @@
                 "aspectRatios": ["1:1"],
                 "minReferenceImages": 1,
                 "maxReferenceImages": 1,
-                "maxReferenceImageDimension": 256
+                "maxReferenceImageDimension": 256,
+                "animationFrames": true
               }
             ]
           }
