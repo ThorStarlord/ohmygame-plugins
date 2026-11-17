@@ -1,6 +1,6 @@
 ---
 name: pixellab-assets
-description: Choose and prompt PixelLab models for pixel art, eight-direction characters and skeleton animations. Use when a game asset is made with the PixelLab provider; not for other image providers.
+description: Choose and prompt PixelLab models for pixel art, eight-direction characters, frame animations and skeleton animations. Use when a game asset is made with the PixelLab provider; not for other image providers.
 ---
 
 # PixelLab assets
@@ -18,6 +18,9 @@ provider. Use them only when the person has the provider configured.
 - **Skeleton animation** (`skeleton-animation`): needs exactly one character
   reference image. The prompt is the motion only, such as `walk in place`,
   `sword slash` or `fall backward`. Returns the south-facing animation as a GIF.
+- **Frame animation** (`frame-animation`): needs exactly one reference image and
+  a motion prompt such as `run in place` or `swing a sword`. Returns PixelLab's
+  individual generated frames; the app does not rebuild them into a sprite sheet.
 
 ## Results and references
 

@@ -20,10 +20,10 @@ const pluginRoot = fileURLToPath(
   new URL("../plugins/pixellab", import.meta.url),
 );
 const API = "https://api.pixellab.ai/v2";
-const PNG = Buffer.concat([
-  Buffer.from("89504e470d0a1a0a", "hex"),
-  Buffer.alloc(16),
-]);
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
 const GIF = Buffer.concat([Buffer.from("GIF89a"), Buffer.alloc(16)]);
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -82,6 +82,8 @@ async function setup(t: TestContext, reply?: Reply) {
       });
     if (url === `${API}/create-character-v3`)
       return json({ character_id: "c1", background_job_id: "job-c" });
+    if (url === `${API}/animate-with-text-v3`)
+      return json({ background_job_id: "job-f" });
     if (url === `${API}/characters/animations`)
       return json({
         animation_group_id: "g1",
@@ -89,12 +91,17 @@ async function setup(t: TestContext, reply?: Reply) {
         directions: ["south"],
       });
     if (url.startsWith(`${API}/background-jobs/`))
-      return json({ id: "job", status: "completed" });
+      return url.endsWith("job-f")
+        ? json({ id: "job-f", status: "completed", last_response: { images: [
+          { base64: `data:image/png;base64,${PNG.toString("base64")}` },
+          { base64: `data:image/png;base64,${PNG.toString("base64")}` },
+        ] } })
+        : json({ id: "job", status: "completed" });
     if (url.startsWith(`${API}/characters/c1/gif`))
       return new Response(GIF, { headers: { "content-type": "image/gif" } });
     return json({ detail: "not found" }, 404);
   };
-  const media: Media = new PluginMediaProviders(services, fetcher);
+  const media: Media = new PluginMediaProviders(services, fetcher, undefined, undefined, root);
   await services.configure("ohmygame/pixellab", { apiKey: "pl-test-key" });
   await services.setEveryProject("ohmygame/pixellab", true);
   const [provider] = await media.imageProviders();
@@ -104,7 +111,7 @@ async function setup(t: TestContext, reply?: Reply) {
     media,
     requests,
     model,
-    restart: (): Media => new PluginMediaProviders(services, fetcher),
+    restart: (): Media => new PluginMediaProviders(services, fetcher, undefined, undefined, root),
     journal: (id = "job-1") => mediaTaskJournal(path.join(root, "tasks"), id),
     GenerationShutdown,
   };
@@ -113,7 +120,7 @@ async function setup(t: TestContext, reply?: Reply) {
 it("declares beta image models with their reference rules", async (t) => {
   const s = await setup(t);
   assert.deepEqual(
-    ["pixen", "character", "skeleton-animation"].map((id) => {
+    ["pixen", "character", "skeleton-animation", "frame-animation"].map((id) => {
       const { maxReferenceImages, minReferenceImages, promptOptionalWithReference } = s.model(id);
       return { id, maxReferenceImages, minReferenceImages, promptOptionalWithReference };
     }),
@@ -121,6 +128,7 @@ it("declares beta image models with their reference rules", async (t) => {
       { id: "pixen", maxReferenceImages: 0, minReferenceImages: undefined, promptOptionalWithReference: undefined },
       { id: "character", maxReferenceImages: 1, minReferenceImages: undefined, promptOptionalWithReference: true },
       { id: "skeleton-animation", maxReferenceImages: 1, minReferenceImages: 1, promptOptionalWithReference: undefined },
+      { id: "frame-animation", maxReferenceImages: 1, minReferenceImages: 1, promptOptionalWithReference: undefined },
     ],
   );
 });
@@ -203,6 +211,25 @@ it("animates a scaled reference and downloads the GIF with the key", async (t) =
     `${API}/characters/c1/gif?animation_group_id=g1&direction=south`,
   );
   assert.equal(download.headers.get("authorization"), "Bearer pl-test-key");
+});
+
+it("generates ordinary frame animation from a reference and action", async (t) => {
+  const s = await setup(t);
+  const reference = await sharp({
+    create: { width: 128, height: 128, channels: 4, background: "#336699" },
+  }).png().toBuffer();
+  const frames = await s.media.generateImage(
+    s.model("frame-animation"),
+    { prompt: "run in place", images: [{ mediaType: "image/png", data: reference.toString("base64") }] },
+    undefined,
+    { journal: await s.journal("frame-animation") },
+  );
+  assert.equal(frames.mediaType, "image/gif");
+  assert.equal(frames.bytes.subarray(0, 6).toString("ascii"), "GIF89a");
+  const request = s.requests.find((r) => r.url === `${API}/animate-with-text-v3`)!;
+  assert.equal(request.headers.get("authorization"), "Bearer pl-test-key");
+  assert.equal(request.body?.action, "run in place");
+  assert.equal(request.body?.frame_count, 8);
 });
 
 it("resumes a character job after shutdown without paying again", async (t) => {
