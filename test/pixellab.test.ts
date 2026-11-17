@@ -101,7 +101,7 @@ async function setup(t: TestContext, reply?: Reply) {
       return new Response(GIF, { headers: { "content-type": "image/gif" } });
     return json({ detail: "not found" }, 404);
   };
-  const media: Media = new PluginMediaProviders(services, fetcher);
+  const media: Media = new PluginMediaProviders(services, fetcher, undefined, undefined, root);
   await services.configure("ohmygame/pixellab", { apiKey: "pl-test-key" });
   await services.setEveryProject("ohmygame/pixellab", true);
   const [provider] = await media.imageProviders();
@@ -111,7 +111,7 @@ async function setup(t: TestContext, reply?: Reply) {
     media,
     requests,
     model,
-    restart: (): Media => new PluginMediaProviders(services, fetcher),
+    restart: (): Media => new PluginMediaProviders(services, fetcher, undefined, undefined, root),
     journal: (id = "job-1") => mediaTaskJournal(path.join(root, "tasks"), id),
     GenerationShutdown,
   };
