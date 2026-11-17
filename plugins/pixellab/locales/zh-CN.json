@@ -4,7 +4,7 @@
   "plugin.longDescription": "在图片节点中使用 PixelLab 的 Pixen 像素画、八方向角色和骨骼动画。八方向角色可使用描述或一张参考图；角色和动画以 PixelLab 生成的 GIF 返回。骨骼动画需要一张角色参考图和动作描述。付费任务在重启后可以继续；停止只会结束本地等待，PixelLab 仍可能完成任务并扣费。",
   "config.apiKey.title": "PixelLab API 密钥",
   "config.apiKey.description": "仅发送到 api.pixellab.ai。",
-  "provider.pixellab": "PixelLab（插件）",
+  "provider.pixellab": "PixelLab",
   "model.pixen": "Pixen 像素画",
   "model.character": "角色（八方向）",
   "model.animation": "骨骼动画"
