@@ -1,7 +1,9 @@
 // A Library source for game-icons.net: about 4,000 game icons as SVG, under
 // CC BY 3.0 or CC0. The list of icons comes from the site's GitHub repository
 // and is kept in the plugin's data folder for a week; the files and
-// thumbnails come from game-icons.net.
+// thumbnails come from game-icons.net. Its collections gather the site's own
+// tags, read from their pages when a collection is first browsed and kept
+// for a week too.
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -22,6 +24,99 @@ const AUTHOR_NAMES = {
   "various-artists": "Various artists",
 };
 const ID = /^[a-z0-9-]+\/[a-z0-9-]+$/;
+/**
+ * Each collection of the tab after All, in the manifest's order: the site's
+ * tags it gathers. A tag holds only the icons tagged with it, not those of
+ * the tags listed under it on the site, so a collection names them all.
+ */
+export const COLLECTIONS = {
+  weapon: [
+    "weapon",
+    "arrow",
+    "axe",
+    "blade",
+    "bomb",
+    "explosion",
+    "gun",
+    "target",
+  ],
+  armor: ["armor", "shield", "clothing", "boot", "hat", "mask", "jewellery"],
+  creature: [
+    "creature",
+    "animal",
+    "bird",
+    "fish",
+    "insect",
+    "mammal",
+    "reptile",
+    "claw",
+    "tentacle",
+    "wing",
+    "shell",
+    "vampire",
+    "zombie",
+    "death",
+  ],
+  body: [
+    "body",
+    "anatomy",
+    "blood",
+    "bone",
+    "eye",
+    "hand",
+    "head",
+    "heart",
+    "mouth",
+    "skull",
+  ],
+  magic: ["fire", "ice", "lightning", "energy", "light", "smoke"],
+  potion: ["chemical", "liquid", "poison", "bottle", "glass"],
+  food: ["food", "egg", "fruit", "meat", "kitchenware", "mushroom"],
+  item: [
+    "tool",
+    "bag",
+    "container",
+    "money",
+    "lock",
+    "book",
+    "household",
+    "trap",
+    "time",
+  ],
+  nature: [
+    "nature",
+    "plant",
+    "mineral",
+    "metal",
+    "stone",
+    "wood",
+    "sea",
+    "sky",
+    "space",
+  ],
+  building: [
+    "building",
+    "bridge",
+    "door",
+    "tower",
+    "vehicle",
+    "boat",
+    "machine",
+    "robot",
+    "electronic",
+  ],
+  symbol: [
+    "abstract",
+    "cross",
+    "gui",
+    "star",
+    "symbol",
+    "rank",
+    "state",
+    "flag",
+    "action",
+  ],
+};
 
 /** `lorc/broadsword.svg` paths from the repository's file list. */
 export function iconsFromTree(tree) {
@@ -67,6 +162,16 @@ export function match(icons, query) {
 
 function byName(a, b) {
   return a.split("/")[1].localeCompare(b.split("/")[1]) || a.localeCompare(b);
+}
+
+/** The icons a tag's page on the site lists, as `author/name`. */
+export function iconsFromTagPage(html) {
+  const ids = new Set();
+  for (const [, id] of String(html).matchAll(
+    /href="\/1x1\/([a-z0-9-]+\/[a-z0-9-]+)\.html"/g,
+  ))
+    ids.add(id);
+  return [...ids];
 }
 
 export function credit(id) {
@@ -132,15 +237,72 @@ export function activate(context) {
     return loading;
   }
 
-  context.registerCommand("search", async ({ query, cursor }) => {
-    const found = match(await icons(), query);
-    const start = Number(cursor ?? 0);
-    const next = start + PAGE_SIZE;
-    return {
-      items: found.slice(start, next).map(item),
-      ...(next < found.length ? { next: String(next) } : {}),
-    };
-  });
+  const collecting = new Map();
+
+  /**
+   * The icons of a collection: those of its tags that the icon list has.
+   * Kept for a week, and kept longer when the site can't be reached.
+   */
+  async function collection(id) {
+    const file = path.join(context.dataFolder, `collection-${id}.json`);
+    const saved = await readFile(file, "utf8")
+      .then(JSON.parse)
+      .catch(() => undefined);
+    if (saved && Date.now() - saved.fetchedAt < INDEX_AGE) return saved.icons;
+    if (!collecting.has(id))
+      collecting.set(
+        id,
+        (async () => {
+          try {
+            const pages = await Promise.all(
+              COLLECTIONS[id].map(async (tag) => {
+                const response = await fetch(`${SITE}/tags/${tag}.html`, {
+                  headers: HEADERS,
+                });
+                // A tag the site no longer has leaves the others.
+                if (response.status === 404) return [];
+                if (!response.ok)
+                  throw new Error(
+                    `game-icons.net answered ${response.status} for the ${tag} tag`,
+                  );
+                return iconsFromTagPage(await response.text());
+              }),
+            );
+            const list = [...new Set(pages.flat())];
+            await writeFile(
+              file,
+              JSON.stringify({ fetchedAt: Date.now(), icons: list }),
+            );
+            return list;
+          } catch (error) {
+            if (saved) return saved.icons;
+            throw error;
+          } finally {
+            collecting.delete(id);
+          }
+        })(),
+      );
+    return collecting.get(id);
+  }
+
+  context.registerCommand(
+    "search",
+    async ({ query, cursor, collection: id }) => {
+      let list = await icons();
+      // An older app sends no collection, and All has none: every icon.
+      if (COLLECTIONS[id]) {
+        const tagged = new Set(await collection(id));
+        list = list.filter((icon) => tagged.has(icon));
+      }
+      const found = match(list, query);
+      const start = Number(cursor ?? 0);
+      const next = start + PAGE_SIZE;
+      return {
+        items: found.slice(start, next).map(item),
+        ...(next < found.length ? { next: String(next) } : {}),
+      };
+    },
+  );
 
   context.registerCommand("fetch", async ({ id }) => {
     if (!ID.test(String(id)))

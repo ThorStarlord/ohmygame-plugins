@@ -32,7 +32,58 @@
           "image"
         ],
         "search": "search",
-        "fetch": "fetch"
+        "fetch": "fetch",
+        "collections": [
+          {
+            "id": "all",
+            "title": "%collection.all%"
+          },
+          {
+            "id": "weapon",
+            "title": "%collection.weapon%"
+          },
+          {
+            "id": "armor",
+            "title": "%collection.armor%"
+          },
+          {
+            "id": "creature",
+            "title": "%collection.creature%"
+          },
+          {
+            "id": "body",
+            "title": "%collection.body%"
+          },
+          {
+            "id": "magic",
+            "title": "%collection.magic%"
+          },
+          {
+            "id": "potion",
+            "title": "%collection.potion%"
+          },
+          {
+            "id": "food",
+            "title": "%collection.food%"
+          },
+          {
+            "id": "item",
+            "title": "%collection.item%"
+          },
+          {
+            "id": "nature",
+            "title": "%collection.nature%"
+          },
+          {
+            "id": "building",
+            "title": "%collection.building%"
+          },
+          {
+            "id": "symbol",
+            "title": "%collection.symbol%"
+          }
+        ],
+        "cacheSeconds": 86400
       }
     ]
   }

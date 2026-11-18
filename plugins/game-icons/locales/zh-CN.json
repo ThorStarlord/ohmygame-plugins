@@ -3,5 +3,17 @@
   "plugin.description": "把 game-icons.net 的游戏图标加入素材库：约 4000 个 SVG 图标。",
   "plugin.longDescription": "在素材库中添加“游戏图标”标签，收录 game-icons.net 的约 4000 个图标：武器、药水、技能、职业、状态效果等。请用英文搜索；添加的图标是透明背景上的黑色 SVG，可以直接改颜色。大多数图标采用 CC BY 3.0 许可，使用时请署名每个图标附带的作者。",
   "source.title": "游戏图标",
-  "source.description": "来自 game-icons.net 的图标，大多采用 CC BY 3.0 许可，使用时请署名每个图标显示的作者。请用英文搜索，例如 sword、potion、shield。"
+  "source.description": "来自 game-icons.net 的图标，大多采用 CC BY 3.0 许可，使用时请署名每个图标显示的作者。请用英文搜索，例如 sword、potion、shield。",
+  "collection.all": "全部",
+  "collection.weapon": "武器",
+  "collection.armor": "护甲与服饰",
+  "collection.creature": "生物",
+  "collection.body": "身体",
+  "collection.magic": "元素",
+  "collection.potion": "药水",
+  "collection.food": "食物",
+  "collection.item": "物品与工具",
+  "collection.nature": "自然",
+  "collection.building": "建筑与载具",
+  "collection.symbol": "符号与界面"
 }

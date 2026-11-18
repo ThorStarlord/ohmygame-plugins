@@ -74,6 +74,40 @@ describe("game-icons", () => {
     assert.deepEqual((await commands.search!({ query: "potion" })).items.map((item: { id: string }) => item.id), ["delapouite/health-potion"]);
   });
 
+  it("browses a collection by the site's tags, kept for a week", async () => {
+    const page = (...ids: string[]) => `<html>${ids.map((id) => `<a href="/1x1/${id}.html">${id}</a><a href="/1x1/${id}.html"></a>`).join("")}</html>`;
+    const requests = stubFetch((url) => {
+      if (url.startsWith("https://api.github.com/")) return Response.json(tree);
+      // A tag that holds an icon the list doesn't (a badge) and one the site no longer has.
+      if (url === "https://game-icons.net/tags/weapon.html") return new Response(page("lorc/broadsword", "badges/sword"));
+      if (url === "https://game-icons.net/tags/blade.html") return new Response(page("lorc/sword-clash", "lorc/broadsword"));
+      if (url === "https://game-icons.net/tags/gun.html") return new Response("", { status: 404 });
+      if (url.startsWith("https://game-icons.net/tags/")) return new Response(page());
+      return new Response("", { status: 500 });
+    });
+    const { module, commands, dataFolder } = await activate("game-icons");
+    assert.deepEqual(module.iconsFromTagPage(page("lorc/broadsword", "lorc/broadsword")), ["lorc/broadsword"]);
+    const ids = async (input: Record<string, unknown>) => (await commands.search!(input)).items.map((item: { id: string }) => item.id);
+
+    assert.deepEqual(await ids({ query: "", collection: "weapon" }), ["lorc/broadsword", "lorc/sword-clash"]);
+    assert.deepEqual(await ids({ query: "clash", collection: "weapon" }), ["lorc/sword-clash"]);
+    assert.deepEqual(await ids({ query: "potion", collection: "weapon" }), []);
+    // All, and an app that sends no collection, have every icon.
+    assert.equal((await ids({ query: "", collection: "all" })).length, 4);
+    assert.equal((await ids({ query: "" })).length, 4);
+    const tagRequests = () => requests.filter((url) => url.includes("/tags/")).length;
+    assert.equal(tagRequests(), module.COLLECTIONS.weapon.length);
+
+    // Kept for a week; older, it is read again, and kept when the site fails.
+    const file = path.join(dataFolder, "collection-weapon.json");
+    await writeFile(file, JSON.stringify({ ...JSON.parse(await readFile(file, "utf8")), fetchedAt: 0 }));
+    stubFetch((url) => (url.startsWith("https://api.github.com/") ? Response.json(tree) : new Response("", { status: 503 })));
+    assert.deepEqual(await ids({ query: "", collection: "weapon" }), ["lorc/broadsword", "lorc/sword-clash"]);
+    stubFetch(() => new Response("", { status: 503 }));
+    await rm(file);
+    await assert.rejects(commands.search!({ query: "", collection: "weapon" }), /game-icons.net answered 503 for the \w+ tag/);
+  });
+
   it("downloads an icon as a black SVG with its author's credit", async () => {
     const requests = stubFetch(() => new Response(svg));
     const { commands, dataFolder } = await activate("game-icons");
