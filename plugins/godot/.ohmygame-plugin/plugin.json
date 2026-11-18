@@ -93,7 +93,7 @@
         "slots": [{ "slot": "project.toolbar", "when": "project.plugin('ohmygame/godot')" }, { "slot": "game.start" }]
       },
       { "id": "settings-status", "title": "%command.status%", "run": { "native": "settingsStatus", "changesFiles": false } },
-      { "id": "install-web-templates", "title": "%command.installTemplates%", "run": { "native": "installWebTemplatesInBackground", "changesFiles": false }, "slots": [{ "slot": "game.start", "when": "preview.status == 'error'" }] }
+      { "id": "install-web-templates", "title": "%command.installTemplates%", "run": { "native": "installWebTemplatesInBackground", "changesFiles": false } }
     ],
     "settings": {
       "groups": [
