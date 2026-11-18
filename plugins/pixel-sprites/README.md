@@ -5,7 +5,7 @@ A Library source for the [Pixel Art Atlas](https://huggingface.co/datasets/Angai
 searched by meaning as in the
 [Pixel Search](https://huggingface.co/spaces/cfahlgren1/pixel-search) Space.
 Requires OhMyGame plugin API **2.5+**; its collections and one-day cache need
-**2.33+**.
+**2.35+**.
 
 ## Use
 

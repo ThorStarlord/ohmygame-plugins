@@ -103,7 +103,7 @@ export function item(result, mediaType) {
   const thumbnail =
     (mediaType === "image" ? siteThumbnail(result.url) : undefined) ??
     https(result.thumbnail);
-  // A sound plays from its source site before it is added (OhMyGame API 2.33).
+  // A sound plays from its source site before it is added (OhMyGame API 2.35).
   const preview = mediaType === "audio" ? https(result.url) : undefined;
   const duration =
     typeof result.duration === "number" && result.duration > 0

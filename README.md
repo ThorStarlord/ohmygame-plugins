@@ -48,7 +48,7 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
   music, sound effects and images, and [`pixel-sprites`](plugins/pixel-sprites)
   searches 1.4 million AI-generated 16×16 pixel art sprites (optional Betas,
   require OhMyGame API 2.5; collections, previews and cache durations need
-  2.33).
+  2.35).
 - Messaging connections: [`feishu`](plugins/feishu), an optional private-chat
   bot with an explicit allowed user, durable delivery tracking and approvals
   kept in OhMyGame (Beta; use desktop Beta 5.8 or newer). Build it with

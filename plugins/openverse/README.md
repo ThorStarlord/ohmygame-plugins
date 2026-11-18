@@ -2,7 +2,7 @@
 
 A Library source for [Openverse](https://openverse.org): openly licensed music,
 sound effects and images. Requires OhMyGame plugin API **2.5+**; its
-collections, previews and one-hour cache need **2.33+**.
+collections, previews and one-hour cache need **2.35+**.
 
 ## Use
 
