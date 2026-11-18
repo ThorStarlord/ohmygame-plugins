@@ -36,6 +36,10 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
 - Character speech: [`fish-audio`](plugins/fish-audio), an optional Beta with
   S2.1 Pro / Pro Free, workspace/public voice search and MP3/WAV output
   (requires host API 2.25).
+- Level editing: [`level-editor`](plugins/level-editor), an optional Beta
+  Levels panel that edits Tiled JSON maps in the project: tiles, layers,
+  collisions and spawn points. It is on only in projects that turn it on
+  (requires OhMyGame API 2.34).
 - Local image workflows: [`comfyui`](plugins/comfyui), an optional Beta for
   an existing local server, API-format workflow import and durable image recovery
   (requires host API 2.31).
