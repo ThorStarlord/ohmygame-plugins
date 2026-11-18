@@ -5,7 +5,7 @@ import path from "node:path";
 import { it } from "node:test";
 import { crc32, deflateRawSync } from "node:zlib";
 // @ts-expect-error The plugin's native code is plain JavaScript.
-import { godotBuild, installWebTemplates, templatesFolder, templatesProblem, templatesUrl } from "../plugins/godot/native/templates.mjs";
+import { godotBuild, installWebTemplates, isSelfContained, templatesFolder, templatesProblem, templatesUrl } from "../plugins/godot/native/templates.mjs";
 
 /** A zip as Godot's .tpz is one: stored and deflated entries under `templates/`. */
 function zip(files: Record<string, Buffer>, { stored = [] as string[], corrupt = "" } = {}) {
@@ -62,6 +62,27 @@ it("reads Godot builds and finds their official template archives", () => {
   assert.equal(templatesProblem(godotBuild("4.3.stable.custom_build.77dcf97d8")), "custom");
   assert.equal(templatesProblem(undefined), "unknown");
   assert.equal(templatesFolder("4.6.1.stable.official.14d19694e", { platform: "linux", env: {}, home: "/home/me" }), "/home/me/.local/share/godot/export_templates/4.6.1.stable");
+  // The .NET build has its own folder; Godot ignores a relative data folder.
+  assert.equal(godotBuild("4.3.stable.mono.official.77dcf97d8")!.folder, "4.3.stable.mono");
+  assert.equal(templatesFolder("4.3.stable.official", { platform: "linux", env: { XDG_DATA_HOME: "" }, home: "/home/me" }), "/home/me/.local/share/godot/export_templates/4.3.stable");
+  assert.equal(templatesFolder("4.3.stable.official", { platform: "linux", env: { XDG_DATA_HOME: "data" }, home: "/home/me" }), "/home/me/.local/share/godot/export_templates/4.3.stable");
+  assert.equal(templatesFolder("4.3.stable.official", { platform: "win32", env: {}, home: "C:/Users/me" }), path.join("C:/Users/me", "AppData", "Roaming", "Godot", "export_templates", "4.3.stable"));
+  assert.equal(templatesFolder("4.3.stable.official", { platform: "linux", env: {}, home: "/home/me", executable: "/opt/godot/godot", selfContained: true }), "/opt/godot/editor_data/export_templates/4.3.stable");
+  // Before 4.3 there are no no-threads web templates to install.
+  assert.equal(templatesProblem(godotBuild("4.2.2.stable.official.abc")), "old");
+  assert.equal(templatesProblem(godotBuild("3.6.stable.official.abc")), "old");
+  assert.equal(templatesProblem(godotBuild("4.3.stable.official.abc")), undefined);
+});
+
+it("tells a self-contained editor by the file beside it", async () => {
+  const folder = await mkdtemp(path.join(tmpdir(), "godot-sc-"));
+  try {
+    const executable = path.join(folder, "godot");
+    assert.equal(await isSelfContained(executable, "linux"), false);
+    await writeFile(path.join(folder, "._sc_"), "");
+    assert.equal(await isSelfContained(executable, "linux"), true);
+    assert.equal(await isSelfContained(executable, "darwin"), false);
+  } finally { await rm(folder, { recursive: true, force: true }); }
 });
 
 it("installs only the web templates, read with ranges and checked", async () => {

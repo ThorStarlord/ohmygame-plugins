@@ -4,7 +4,7 @@
 // HTTP range requests, checked against the archive's CRC-32s, and placed where
 // Godot's own template manager puts them.
 
-import { mkdir, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { crc32, inflateRawSync } from "node:zlib";
@@ -22,26 +22,43 @@ export function godotBuild(version) {
   const match = /^(\d+\.\d+(?:\.\d+)?)\.([a-z]+\d*)((?:\.[a-z0-9]+)*)/.exec(String(version ?? "").trim());
   if (!match) return undefined;
   const flags = match[3].split(".").filter(Boolean);
+  const mono = flags.includes("mono");
   return {
     number: match[1],
     status: match[2],
-    /** Godot looks for templates in a folder with this name. */
-    folder: `${match[1]}.${match[2]}`,
-    mono: flags.includes("mono"),
+    /** Godot looks for templates in a folder with this name: the .NET build's have their own. */
+    folder: `${match[1]}.${match[2]}${mono ? ".mono" : ""}`,
+    mono,
     official: flags.includes("official"),
   };
 }
 
-/** Where Godot keeps a version's export templates. */
-export function templatesFolder(version, { platform = process.platform, env = process.env, home = os.homedir() } = {}) {
+/** An environment variable that names an absolute folder, as Godot only uses those. */
+const absolute = (value) => (value && path.isAbsolute(value) ? value : undefined);
+
+/**
+ * Where Godot keeps a version's export templates: beside a self-contained
+ * editor (a `_sc_` or `._sc_` file next to its executable, on Windows and
+ * Linux), else in its data folder.
+ */
+export function templatesFolder(version, { platform = process.platform, env = process.env, home = os.homedir(), executable, selfContained } = {}) {
   const id = godotBuild(version)?.folder ?? version;
+  if (executable && platform !== "darwin" && selfContained) return path.join(path.dirname(executable), "editor_data", "export_templates", id);
   const base =
     platform === "darwin"
       ? path.join(home, "Library/Application Support/Godot")
       : platform === "win32"
-        ? path.join(env.APPDATA ?? "", "Godot")
-        : path.join(env.XDG_DATA_HOME ?? path.join(home, ".local/share"), "godot");
+        ? path.join(absolute(env.APPDATA) ?? path.join(home, "AppData", "Roaming"), "Godot")
+        : path.join(absolute(env.XDG_DATA_HOME) ?? path.join(home, ".local/share"), "godot");
   return path.join(base, "export_templates", id);
+}
+
+/** Whether an editor is self-contained: it keeps its data, templates included, next to itself. */
+export async function isSelfContained(executable, platform = process.platform) {
+  if (!executable || platform === "darwin") return false;
+  const folder = path.dirname(executable);
+  for (const name of ["_sc_", "._sc_"]) if (await stat(path.join(folder, name)).then(() => true, () => false)) return true;
+  return false;
 }
 
 export async function hasWebTemplates(version, options) {
@@ -63,6 +80,9 @@ export function templatesUrl(build) {
 /** Why the web templates can't be installed for this build, or undefined when they can. */
 export function templatesProblem(build) {
   if (!build) return "unknown";
+  // The no-threads web templates the build uses came with 4.3.
+  const [major, minor] = build.number.split(".").map(Number);
+  if (major < 4 || (major === 4 && minor < 3)) return "old";
   // Godot 4 can't export C# projects to the web; its .NET build has no web templates to use.
   if (build.mono && Number(build.number.split(".")[0]) >= 4) return "mono";
   if (!build.official) return "custom";
@@ -188,7 +208,8 @@ export async function installWebTemplates(version, { fetch: fetcher = globalThis
   let received = 0;
   onProgress?.(0, total);
   const target = folder ?? templatesFolder(version);
-  const staging = `${target}.ohmygame-${process.pid}-${Date.now()}`;
+  // A dot folder, so neither Godot nor this plugin takes one left by a stopped app for a version's templates.
+  const staging = path.join(path.dirname(target), `.ohmygame-staging-${path.basename(target)}-${process.pid}-${Date.now()}`);
   await mkdir(staging, { recursive: true });
   try {
     for (const [name, file] of wanted) {
@@ -202,7 +223,9 @@ export async function installWebTemplates(version, { fetch: fetcher = globalThis
     if (versionFile && versionFile.uncompressed < 200) await writeFile(path.join(staging, "version.txt"), await readEntry(reader, versionFile));
     await mkdir(target, { recursive: true });
     // Templates Godot already has, for other platforms, stay; these replace their own names only.
-    for (const name of await readdir(staging)) await rename(path.join(staging, name), path.join(target, name));
+    // The release template last: Godot and the status read take it as the sign that the rest is there.
+    const names = (await readdir(staging)).sort((a, b) => Number(a === WEB_TEMPLATE_FILES[0]) - Number(b === WEB_TEMPLATE_FILES[0]));
+    for (const name of names) await rename(path.join(staging, name), path.join(target, name));
   } finally {
     await rm(staging, { recursive: true, force: true });
   }
