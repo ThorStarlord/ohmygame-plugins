@@ -21,7 +21,7 @@ export function createInspector({ element, t, selection: currentSelection, doc: 
       return;
     }
     const { object } = selection;
-    const readOnly = !editable();
+    const readOnly = !editable(selection);
     const signature = JSON.stringify([object.id, readOnly, Boolean(object.point), (object.properties ?? []).map((property) => [property.name, property.type])]);
     if (box.object === object && box.signature === signature) {
       // Same object and fields: refresh the values, except in the field being typed in.
@@ -57,7 +57,7 @@ export function createInspector({ element, t, selection: currentSelection, doc: 
         else renderInspector();
       }, { type: "number", step: "any", disabled: (key === "width" || key === "height") && object.point ? true : undefined });
     const classKey = tmj.classKey(doc, object);
-    const properties = (object.properties ?? []).map((property) => propertyRow(object, property, readOnly));
+    const properties = (object.properties ?? []).map((property) => propertyRow(object, property.name, readOnly));
     box.replaceChildren(
       h("div", { class: "object-id" }, h("span", { class: "note" }, `#${object.id ?? "?"}`)),
       input(t.name, () => object.name ?? "", (value) => edit((target) => tmj.setKey(target, "name", value))),
@@ -76,9 +76,13 @@ export function createInspector({ element, t, selection: currentSelection, doc: 
     );
   }
 
-  function propertyRow(object, property, readOnly) {
+  // Each read goes through `current()`: undo and redo put back copies of the
+  // properties, so a property object held from when the row was drawn may be stale.
+  function propertyRow(object, propertyName, readOnly) {
     const box = element;
     const edit = (change) => editFields(object, change);
+    const current = () => tmj.propertyNamed(object, propertyName);
+    const property = current();
     const simple = tmj.PROPERTY_TYPES.includes(property.type ?? "string");
     const type = property.type ?? "string";
     const name = h("omg-input", {
@@ -88,8 +92,8 @@ export function createInspector({ element, t, selection: currentSelection, doc: 
       on: {
         change: (event) => {
           const next = event.currentTarget.value.trim();
-          if (next && next !== property.name) edit((target) => tmj.renameProperty(target, property.name, next));
-          else event.currentTarget.value = property.name;
+          if (next && next !== propertyName) edit((target) => tmj.renameProperty(target, propertyName, next));
+          else event.currentTarget.value = propertyName;
           renderInspector();
         },
       },
@@ -101,7 +105,12 @@ export function createInspector({ element, t, selection: currentSelection, doc: 
             "aria-label": t.propertyType,
             value: type,
             disabled: readOnly,
-            on: { change: (event) => edit((target) => tmj.setProperty(target, property.name, event.currentTarget.value, tmj.propertyValue(event.currentTarget.value, property.value))) },
+            on: {
+              change: (event) => {
+                const next = event.currentTarget.value;
+                edit((target) => tmj.setProperty(target, propertyName, next, tmj.propertyValue(next, current()?.value)));
+              },
+            },
           },
           tmj.PROPERTY_TYPES.map((option) => h("option", { value: option }, option)),
         )
@@ -112,9 +121,9 @@ export function createInspector({ element, t, selection: currentSelection, doc: 
         "aria-label": t.propertyValue,
         checked: Boolean(property.value),
         disabled: readOnly,
-        on: { change: (event) => edit((target) => tmj.setProperty(target, property.name, "bool", event.currentTarget.checked)) },
+        on: { change: (event) => edit((target) => tmj.setProperty(target, propertyName, "bool", event.currentTarget.checked)) },
       });
-      box.fields.push({ element: value, kind: "checkbox", value: () => property.value });
+      box.fields.push({ element: value, kind: "checkbox", value: () => current()?.value });
     } else {
       value = h("omg-input", {
         "aria-label": t.propertyValue,
@@ -122,9 +131,9 @@ export function createInspector({ element, t, selection: currentSelection, doc: 
         readonly: readOnly || !simple,
         type: type === "int" || type === "float" ? "number" : undefined,
         step: type === "float" ? "any" : undefined,
-        on: { change: (event) => edit((target) => tmj.setProperty(target, property.name, type, tmj.propertyValue(type, event.currentTarget.value))) },
+        on: { change: (event) => edit((target) => tmj.setProperty(target, propertyName, type, tmj.propertyValue(type, event.currentTarget.value))) },
       });
-      if (simple) box.fields.push({ element: value, value: () => property.value });
+      if (simple) box.fields.push({ element: value, value: () => current()?.value });
     }
     return h(
       "div",
@@ -132,7 +141,7 @@ export function createInspector({ element, t, selection: currentSelection, doc: 
       name,
       typeSelect,
       value,
-      readOnly ? undefined : iconButton("close", t.removeProperty, () => edit((target) => tmj.setProperty(target, property.name, type, undefined))),
+      readOnly ? undefined : iconButton("close", t.removeProperty, () => edit((target) => tmj.setProperty(target, propertyName, type, undefined))),
     );
   }
 

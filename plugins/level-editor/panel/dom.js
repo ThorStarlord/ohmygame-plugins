@@ -38,6 +38,7 @@ const PATHS = {
   group: "M2 4.5h4.5l1.5 1.5h6v7H2z",
   image: "M2.5 3h11v10h-11zM2.5 11l3.5-3.5 3 3 2-2 2.5 2.5M10.5 6.5a1 1 0 100-2 1 1 0 000 2z",
   close: "M4 4l8 8M12 4l-8 8",
+  lock: "M4.5 7.5h7v6h-7zM6 7.5V5.5a2 2 0 014 0v2",
 };
 
 /** An icon by name, hidden from screen readers (its control has the name). */

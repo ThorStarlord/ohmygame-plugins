@@ -34,6 +34,8 @@ const MAX_PROBE_BYTES = 8 * 1024 * 1024;
 /** At most this many JSON files are read when looking for maps. */
 const MAX_PROBES = 400;
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+/** How long after its own save the panel takes a `files` event without paths to be that save. */
+const OWN_WRITE_MS = 3000;
 
 const state = {
   maps: undefined,
@@ -293,7 +295,16 @@ async function switchMap(path) {
   await openPath(path);
 }
 
-async function openPath(path, { keepView = false } = {}) {
+/** Counts calls to `openPath`, so only the latest one's result is used. */
+let opening = 0;
+
+/**
+ * Opens a map. `keepView` keeps the zoom and position, as when the same map
+ * is read again; without `force`, a reload that finds edits made while it
+ * read the file shows the changed-on-disk notice instead of replacing them.
+ */
+async function openPath(path, { keepView = false, force = false } = {}) {
+  const ticket = ++opening;
   state.openError = "";
   let text;
   let map;
@@ -301,12 +312,20 @@ async function openPath(path, { keepView = false } = {}) {
     text = await host.files.text(path);
     map = await tmj.openMap(text, path);
   } catch (error) {
-    state.openError = t.openFailed(error instanceof Error ? error.message : String(error));
+    if (ticket !== opening) return;
+    state.openError = t.openFailed(errorText(error));
     if (!keepView) {
       state.map = undefined;
       renderMapSelect();
     }
     refresh();
+    return;
+  }
+  if (ticket !== opening) return;
+  // Edits made while the file was read stay; the notice offers the choice.
+  if (!force && keepView && state.map?.path === path && isDirty()) {
+    if (text !== state.diskText) state.external = text;
+    renderNotices();
     return;
   }
   const previous = state.map?.path === path ? { active: state.active?.id, selected: state.selection?.object.id } : undefined;
@@ -335,7 +354,13 @@ async function openPath(path, { keepView = false } = {}) {
   if (!tmj.isEditable(map)) state.tool = "select";
   if (!keepView) state.paletteIndex = 0;
   renderMapSelect();
-  await loadTilesets();
+  try {
+    await loadTilesets();
+  } catch (error) {
+    // The map is open; say what went wrong with its tilesets.
+    state.openError = t.openFailed(errorText(error));
+  }
+  if (ticket !== opening) return;
   if (!keepView) fitView();
   // Start with the first tile of the first tileset on the brush.
   if (!keepView && state.tilesets[0]?.ids.length) pickStamp(tmj.stampOf(1, 1, [state.tilesets[0].firstgid + state.tilesets[0].ids[0]]), true);
@@ -344,34 +369,68 @@ async function openPath(path, { keepView = false } = {}) {
 
 async function save() {
   const map = state.map;
-  if (!map || !editable() || state.saving) return;
+  if (!map || !editable() || state.saving || !isDirty()) return;
+  // Not over a newer file on disk until the person chooses what to keep.
+  if (state.external !== undefined) {
+    say(t.chooseFirst);
+    renderNotices();
+    return;
+  }
   state.saving = true;
+  // A stroke in progress ends here; strokes don't continue while saving.
+  if (state.drag?.kind === "paint") {
+    tileStep(state.drag.tiles.gids, state.drag.changes);
+    state.drag = undefined;
+  }
   updateToolbar();
-  const at = state.at;
   try {
+    let disk;
+    try {
+      disk = await host.files.text(map.path);
+    } catch {
+      disk = undefined;
+    }
+    if (map !== state.map) return;
+    if (disk !== undefined && disk !== state.diskText) {
+      state.external = disk;
+      say(t.chooseFirst);
+      return;
+    }
+    const at = state.at;
     const text = await tmj.serializeMap(map);
     await host.files.write(map.path, text);
     tmj.markSaved(map);
+    state.ownWrite = Date.now();
     state.diskText = text;
     state.savedAt = at;
     state.external = undefined;
   } catch (error) {
-    void host.request("ui.toast", { message: t.saveFailed(error instanceof Error ? error.message : String(error)), tone: "danger" }).catch(() => {});
+    toast(t.saveFailed(errorText(error)));
   } finally {
     state.saving = false;
     refresh();
   }
 }
 
+const errorText = (error) => (error instanceof Error ? error.message : String(error));
+
+function toast(text) {
+  void host.request("ui.toast", { message: text.slice(0, 500), tone: "danger" }).catch(() => {});
+}
+
 // When the project's files change: the map list, and the open map if it
-// (or its tilesets and images) changed on disk.
-host.on("files", ({ paths }) => {
-  if (!paths || paths.some((path) => MAP_FILE.test(path) || /\.png$/i.test(path))) rescanSoon();
+// (or its tilesets and images) changed on disk. Without `paths`, or when
+// they were cut short, anything may have changed.
+host.on("files", ({ paths, truncated }) => {
+  const known = paths && !truncated ? paths : undefined;
+  // The event that follows the panel's own save names no paths.
+  const ownSave = !known && Date.now() - (state.ownWrite ?? 0) < OWN_WRITE_MS;
+  if (known ? known.some((path) => MAP_FILE.test(path) || /\.png$/i.test(path)) : !ownSave) rescanSoon();
   const map = state.map;
   if (!map) return;
-  if (!paths || paths.includes(map.path)) void checkDisk();
+  if (!known || known.includes(map.path)) void checkDisk();
   const dependencies = state.dependencies ?? new Set();
-  const touched = paths ? paths.filter((path) => dependencies.has(path)) : [...dependencies];
+  const touched = known ? known.filter((path) => dependencies.has(path)) : ownSave ? [] : [...dependencies];
   if (touched.length) void refreshDependencies(map, touched);
 });
 
@@ -404,6 +463,7 @@ async function checkDisk() {
     renderNotices();
     return;
   }
+  if (state.saving) return;
   if (!isDirty()) await openPath(map.path, { keepView: true });
   else {
     state.external = text;
@@ -495,7 +555,7 @@ function runtimeTileset(data, firstgid, base, external, error) {
   const atlas = Boolean(data.image) && data.columns > 0;
   const paths = new Set();
   if (data.image) paths.add(tmj.resolvePath(base, data.image));
-  for (const tile of data.tiles ?? []) if (tile.image) paths.add(tmj.resolvePath(base, tile.image));
+  for (const tile of tmj.tilesOf(data)) if (tile.image) paths.add(tmj.resolvePath(base, tile.image));
   paths.delete(undefined);
   return {
     firstgid,
@@ -735,6 +795,31 @@ function cellAt(wx, wy) {
   return [Math.floor(wx / doc.tilewidth), Math.floor(wy / doc.tileheight)];
 }
 
+/** Map point (wx, wy) in `layer`'s own coordinates, its and its groups' offsets taken away. */
+function local(layer, wx, wy) {
+  const [ox, oy] = layer ? layerOffset(layer) : [0, 0];
+  return [wx - ox, wy - oy];
+}
+
+/** The cell of `layer` under map point (wx, wy). */
+function cellIn(layer, wx, wy) {
+  return cellAt(...local(layer, wx, wy));
+}
+
+/** Whether a layer, or a group it is in, is locked against edits. */
+function locked(target) {
+  let result = false;
+  const visit = (layers, inLocked) => {
+    for (const layer of layers ?? []) {
+      const here = inLocked || layer.locked === true;
+      if (layer === target) result = here;
+      if (layer.type === "group") visit(layer.layers, here);
+    }
+  };
+  visit(state.map?.doc.layers, false);
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Layers.
 
@@ -818,6 +903,7 @@ function renderLayers() {
         ),
         h("span", { class: "layer-kind" }, icon(LAYER_ICONS[layer.type] ?? "tileLayer")),
         name,
+        layer.locked === true ? h("span", { class: "layer-lock", title: t.locked, "aria-label": t.locked }, icon("lock")) : undefined,
       );
       return row;
     }),
@@ -898,10 +984,17 @@ async function deleteLayer() {
   const layer = state.active;
   if (!layer) return;
   let agreed = false;
+  const name = layer.name ?? "";
   try {
-    agreed = await host.request("ui.confirm", { title: t.deleteLayerTitle(layer.name ?? ""), message: t.deleteLayerMessage, confirmLabel: t.delete });
-  } catch {
-    agreed = false;
+    agreed = await host.request("ui.confirm", {
+      title: t.deleteLayerTitle(name.length > 60 ? `${name.slice(0, 59)}…` : name),
+      message: t.deleteLayerMessage,
+      confirmLabel: t.delete,
+    });
+  } catch (error) {
+    // The app couldn't ask (too many questions, or the panel isn't showing).
+    toast(t.couldNotAsk(errorText(error)));
+    return;
   }
   if (!agreed || layer !== state.active) return;
   const parent = parentOf(layer);
@@ -955,7 +1048,7 @@ function activeTiles() {
  */
 function objectLayer(shape) {
   if (state.active?.type === "objectgroup") return state.active;
-  const layers = layerRows().map((row) => row.layer).filter((layer) => layer.type === "objectgroup");
+  const layers = layerRows().map((row) => row.layer).filter((layer) => layer.type === "objectgroup" && !locked(layer));
   const collision = (layer) => /collision/i.test(layer.name ?? "");
   const found = layers.find((layer) => (shape === "rectangle" ? collision(layer) : !collision(layer))) ?? layers[0];
   if (found) state.active = found;
@@ -1049,19 +1142,20 @@ function onPointerDown(event) {
   if (event.button !== 0 || state.saving) return;
   const tool = state.tool;
   if (!editable() && tool !== "select") return;
-  const [cx, cy] = cellAt(at.wx, at.wy);
   if (TILE_TOOLS.has(tool)) {
-    if (tool === "eyedropper") return pickFromMap(cx, cy);
+    if (tool === "eyedropper") return pickFromMap(at.wx, at.wy);
     const tiles = activeTiles();
     if (!tiles) return say(t.needTileLayer);
+    if (locked(state.active)) return say(t.layerLocked);
     if (!shown(state.active)) say(t.hiddenLayer);
+    const [cx, cy] = cellIn(state.active, at.wx, at.wy);
     if (tool !== "eraser" && !state.stamp) return;
     if (tool === "fill") {
       tileStep(tiles.gids, tmj.floodFill(tiles, cx, cy, state.stamp));
       return;
     }
     els.canvas.setPointerCapture(event.pointerId);
-    state.drag = { kind: "paint", tiles, erase: tool === "eraser", changes: new Map(), last: [cx, cy] };
+    state.drag = { kind: "paint", layer: state.active, tiles, erase: tool === "eraser", changes: new Map(), last: [cx, cy] };
     paintCell(state.drag, cx, cy);
     invalidate();
     return;
@@ -1069,13 +1163,15 @@ function onPointerDown(event) {
   if (tool === "rect" || tool === "point") {
     const layer = objectLayer(tool === "rect" ? "rectangle" : "point");
     if (!layer) return say(t.needObjectLayer);
+    if (locked(layer)) return say(t.layerLocked);
+    const point = local(layer, at.wx, at.wy);
     if (tool === "point") {
-      const [x, y] = snapPoint(at.wx, at.wy, event.altKey);
+      const [x, y] = snapPoint(...point, event.altKey);
       addObject(layer, { shape: "point", x, y });
       return;
     }
     els.canvas.setPointerCapture(event.pointerId);
-    state.drag = { kind: "rect", layer, start: [at.wx, at.wy], end: [at.wx, at.wy], free: event.altKey };
+    state.drag = { kind: "rect", layer, start: point, end: point, free: event.altKey };
     invalidate();
     return;
   }
@@ -1084,7 +1180,8 @@ function onPointerDown(event) {
     state.selection = hit;
     if (hit) {
       state.active = hit.layer;
-      if (editable()) {
+      if (locked(hit.layer)) say(t.layerLocked);
+      else if (editable()) {
         els.canvas.setPointerCapture(event.pointerId);
         state.drag = { kind: "move", ...hit, before: tmj.captureFields(hit.object), sx: at.wx, sy: at.wy, ox: hit.object.x, oy: hit.object.y, moved: false };
       }
@@ -1097,17 +1194,21 @@ function onPointerDown(event) {
 function onPointerMove(event) {
   if (!state.map) return;
   const at = pointer(event);
-  const cell = cellAt(at.wx, at.wy);
+  // Cells are those of the active layer, which may be offset.
+  const cell = cellIn(state.active, at.wx, at.wy);
   const hover = state.hover;
   state.hover = { ...at, cx: cell[0], cy: cell[1] };
   const drag = state.drag;
   if (drag?.kind === "pan") {
     state.view = { ...state.view, x: drag.vx + event.clientX - drag.sx, y: drag.vy + event.clientY - drag.sy };
   } else if (drag?.kind === "paint") {
-    for (const [x, y] of line(drag.last[0], drag.last[1], cell[0], cell[1])) paintCell(drag, x, y);
-    drag.last = cell;
+    if (!state.saving) {
+      const [cx, cy] = cellIn(drag.layer, at.wx, at.wy);
+      for (const [x, y] of line(drag.last[0], drag.last[1], cx, cy)) paintCell(drag, x, y);
+      drag.last = [cx, cy];
+    }
   } else if (drag?.kind === "rect") {
-    drag.end = [at.wx, at.wy];
+    drag.end = local(drag.layer, at.wx, at.wy);
     drag.free = event.altKey;
   } else if (drag?.kind === "move") {
     const dx = Math.round(at.wx - drag.sx);
@@ -1141,7 +1242,10 @@ function onPointerUp(event) {
   invalidate();
 }
 
-/** A rectangle drawn from `start` to `end`: whole cells unless free (Alt), at least one cell. */
+/**
+ * A rectangle drawn from `start` to `end`, in its layer's own coordinates:
+ * whole cells unless free (Alt), at least one cell.
+ */
 function rectOf({ start, end, free }) {
   const { tilewidth: tw, tileheight: th } = state.map.doc;
   if (free) {
@@ -1156,7 +1260,7 @@ function rectOf({ start, end, free }) {
   return { x: Math.min(c0, c1) * tw, y: Math.min(r0, r1) * th, width: (Math.abs(c1 - c0) + 1) * tw, height: (Math.abs(r1 - r0) + 1) * th };
 }
 
-/** A point at the centre of its cell, or where it is with Alt. */
+/** A point at the centre of its cell, or where it is with Alt, in its layer's own coordinates. */
 function snapPoint(wx, wy, free) {
   if (free) return [Math.round(wx), Math.round(wy)];
   const { tilewidth: tw, tileheight: th } = state.map.doc;
@@ -1172,7 +1276,8 @@ function addObject(layer, fields) {
 
 function deleteSelection() {
   const selection = state.selection;
-  if (!selection || !editable()) return;
+  if (!selection || !editable() || state.drag) return;
+  if (locked(selection.layer)) return say(t.layerLocked);
   const index = selection.layer.objects.indexOf(selection.object);
   if (index < 0) return;
   state.selection = undefined;
@@ -1181,16 +1286,18 @@ function deleteSelection() {
 
 function nudge(dx, dy) {
   const object = state.selection?.object;
-  if (!object || !editable()) return;
+  if (!object || !editable() || state.drag) return;
+  if (locked(state.selection.layer)) return say(t.layerLocked);
   editFields(object, (target) => {
     target.x += dx;
     target.y += dy;
   });
 }
 
-function pickFromMap(cx, cy) {
+function pickFromMap(wx, wy) {
   const map = state.map;
   const pick = (layer) => {
+    const [cx, cy] = cellIn(layer, wx, wy);
     const tiles = map.tiles.get(layer);
     if (!tiles?.gids || cx < 0 || cy < 0 || cx >= tiles.width || cy >= tiles.height) return 0;
     return tiles.gids[cy * tiles.width + cx];
@@ -1252,7 +1359,8 @@ function updateCursor() {
 // ---------------------------------------------------------------------------
 // The tool's preview over the map.
 
-function drawOverlay(ctx, toDevice, scale) {
+function drawOverlay(ctx, toMap, scale) {
+  const toDevice = toMap;
   const map = state.map;
   const { tilewidth: tw, tileheight: th } = map.doc;
   const dpr = window.devicePixelRatio || 1;
@@ -1272,10 +1380,13 @@ function drawOverlay(ctx, toDevice, scale) {
     ctx.strokeRect(left, top, width, height);
     ctx.setLineDash([]);
   };
+  const frame = box;
 
   const drag = state.drag;
   if (drag?.kind === "rect") {
-    const rect = rectOf(drag);
+    const [ox, oy] = layerOffset(drag.layer);
+    const local = rectOf(drag);
+    const rect = { ...local, x: local.x + ox, y: local.y + oy };
     const [x0, y0] = toDevice(rect.x, rect.y);
     const [x1, y1] = toDevice(rect.x + rect.width, rect.y + rect.height);
     ctx.fillStyle = withAlpha(layerColor(drag.layer, theme), 0.25);
@@ -1284,8 +1395,12 @@ function drawOverlay(ctx, toDevice, scale) {
   }
 
   const hover = state.hover;
-  if (hover && !drag && editable()) {
+  if (hover && !drag && editable() && !locked(state.active)) {
     const { cx, cy } = hover;
+    // Cells and points are those of the active layer, drawn where its offset puts them.
+    const [ox, oy] = state.active ? layerOffset(state.active) : [0, 0];
+    const box = (x, y, w, h, color, dash) => frame(x + ox, y + oy, w, h, color, dash);
+    const toDevice = (x, y) => toMap(x + ox, y + oy);
     if (state.tool === "brush" && state.stamp && activeTiles()) {
       const [x, y] = stampOrigin(cx, cy);
       ctx.globalAlpha = 0.6;
@@ -1307,7 +1422,7 @@ function drawOverlay(ctx, toDevice, scale) {
     } else if (state.tool === "rect") {
       box(cx * tw, cy * th, tw, th, theme.hover, true);
     } else if (state.tool === "point") {
-      const [x, y] = snapPoint(hover.wx, hover.wy, false);
+      const [x, y] = snapPoint(...local(state.active, hover.wx, hover.wy), false);
       const [px, py] = toDevice(x, y);
       ctx.beginPath();
       ctx.arc(px, py, 4 * dpr, 0, Math.PI * 2);
@@ -1430,7 +1545,7 @@ const renderInspector = createInspector({
   t,
   selection: () => state.selection,
   doc: () => state.map.doc,
-  editable,
+  editable: (selection) => editable() && !locked(selection.layer),
   editFields,
   deleteSelection,
 });
@@ -1453,7 +1568,7 @@ function updateToolbar() {
   els.grid.toggleAttribute("data-pressed", state.grid);
   els.grid.setAttribute("aria-pressed", String(state.grid));
   els.dirty.hidden = !map || !isDirty();
-  els.save.disabled = !map || !canEdit || !isDirty() || state.saving;
+  els.save.disabled = !map || !canEdit || !isDirty() || state.saving || state.external !== undefined;
   els.save.busy = state.saving;
   els.save.textContent = state.saving ? t.saving : t.save;
   updateCursor();
@@ -1471,7 +1586,7 @@ function renderNotices() {
           "omg-banner",
           { tone: "warning" },
           t.changedOnDisk,
-          h("omg-button", { slot: "actions", on: { click: () => void openPath(state.map.path, { keepView: true }) } }, t.reload),
+          h("omg-button", { slot: "actions", on: { click: () => void openPath(state.map.path, { keepView: true, force: true }) } }, t.reload),
           h(
             "omg-button",
             {
@@ -1560,13 +1675,23 @@ scanning = scanMaps().catch(() => {
   state.maps = [];
   renderMapSelect();
 });
-await scanning;
-let last;
+// The last map used opens while the scan runs, when it is still a map.
+const last = await host.request("storage.get", { key: "lastMap" }).catch(() => undefined);
+const lastText = typeof last === "string" && MAP_FILE.test(last) ? await host.files.text(last).catch(() => undefined) : undefined;
+let lastIsMap = false;
 try {
-  last = await host.request("storage.get", { key: "lastMap" });
+  lastIsMap = lastText !== undefined && tmj.isTiledMap(JSON.parse(lastText));
 } catch {
-  last = undefined;
+  // Not JSON any more.
 }
-const first = state.maps?.includes(last) ? last : state.maps?.[0];
-if (first) await openPath(first);
-else refresh();
+const start = (path) =>
+  openPath(path).catch((error) => {
+    state.openError = t.openFailed(errorText(error));
+    refresh();
+  });
+if (lastIsMap) await start(last);
+await scanning;
+if (!state.map && !state.openError) {
+  if (state.maps?.[0]) await start(state.maps[0]);
+  else refresh();
+}

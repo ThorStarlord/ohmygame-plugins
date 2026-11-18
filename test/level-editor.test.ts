@@ -99,6 +99,30 @@ describe("level editor map model", () => {
     ]);
   });
 
+  it("keeps a tile edit made while a base64 layer is saved for the next save", async () => {
+    const gids = [1, 2, 3, 4, 5, 6];
+    const data = deflateSync(bytesOf(gids)).toString("base64");
+    const text = mapText([{ compression: "zlib", data, encoding: "base64", height: 2, id: 1, name: "L", type: "tilelayer", width: 3 }]);
+    const map = await tmj.openMap(text, "levels/race.tmj");
+    const tiles = map.tiles.get(map.doc.layers[0]);
+    const tileAt = (saved: string, index: number) => gidsOf(inflateSync(Buffer.from(JSON.parse(saved).layers[0].data, "base64")))[index];
+    tmj.paintStamp(tiles, 0, 0, tmj.stampOf(1, 1, [7]));
+    // The save encodes the tiles as they were when it started…
+    const saving = tmj.serializeMap(map);
+    tmj.paintStamp(tiles, 1, 0, tmj.stampOf(1, 1, [8]));
+    const first = await saving;
+    assert.equal(tileAt(first, 0), 7);
+    assert.equal(tileAt(first, 1), 2);
+    tmj.markSaved(map);
+    // …and the edit made meanwhile is still written by the next one.
+    const second = await tmj.serializeMap(map);
+    assert.equal(tileAt(second, 0), 7);
+    assert.equal(tileAt(second, 1), 8);
+    // Undoing back to what the first save wrote writes its bytes again.
+    tmj.paintStamp(tiles, 1, 0, tmj.stampOf(1, 1, [2]));
+    assert.equal(await tmj.serializeMap(map), first);
+  });
+
   it("opens zstd and infinite maps read-only", async () => {
     const zstd = await tmj.openMap(mapText([{ compression: "zstd", data: "KLUv/SAYwQAA", encoding: "base64", height: 2, id: 1, name: "Z", type: "tilelayer", width: 3 }]), "z.tmj");
     assert.deepEqual(zstd.readOnly, ["zstd"]);
@@ -220,6 +244,13 @@ describe("level editor map model", () => {
     player.properties[1].value = 2;
     tmj.restoreFields(player, before);
     assert.equal(player.properties[1].value, 5);
+    // Properties are looked up by name, so a lookup after undo sees the restored value.
+    const stale = tmj.propertyNamed(player, "lives");
+    tmj.setProperty(player, "lives", "int", 3);
+    tmj.restoreFields(player, before);
+    assert.notEqual(tmj.propertyNamed(player, "lives"), stale);
+    assert.equal(tmj.propertyNamed(player, "lives").value, 5);
+    assert.equal(tmj.propertyNamed(player, "missing"), undefined);
   });
 
   it("keeps other tools' layouts", async () => {
@@ -259,6 +290,26 @@ describe("level editor map model", () => {
     assert.equal(await tmj.serializeMap(map), text);
   });
 
+  it("reads tilesets that keep their tiles keyed by id, as Tiled did before 1.2", async () => {
+    const tileset = {
+      columns: 0, firstgid: 1, margin: 0, name: "props", spacing: 0, tilecount: 2, tileheight: 32, tilewidth: 16,
+      tileproperties: { "3": { solid: true } },
+      tilepropertytypes: { "3": { solid: "bool" } },
+      tiles: { "0": { image: "crate.png", imageheight: 16, imagewidth: 16 }, "3": { image: "tree.png", imageheight: 32, imagewidth: 16 } },
+    };
+    assert.deepEqual(tmj.tileIds(tileset), [0, 3]);
+    assert.deepEqual(tmj.tileSource(tileset, 3), { image: "tree.png", sx: 0, sy: 0, width: 16, height: 32 });
+    assert.equal(tmj.tileSource(tileset, 1), undefined);
+    assert.deepEqual(tmj.tilesOf(tileset).map((tile: { id: number }) => tile.id), [0, 3]);
+    assert.deepEqual(tmj.tilesOf({ tiles: "nonsense" }), []);
+    // The map is written back with the tiles in their old shape.
+    const text = mapText([{ data: [1, 0, 0, 0, 0, 4], height: 2, id: 1, name: "L", type: "tilelayer", width: 3 }], { tilesets: [tileset] });
+    const map = await tmj.openMap(text, "levels/old.json");
+    assert.equal(await tmj.serializeMap(map), text);
+    tmj.paintStamp(map.tiles.get(map.doc.layers[0]), 1, 0, tmj.stampOf(1, 1, [4]));
+    assert.deepEqual(JSON.parse(await tmj.serializeMap(map)).tilesets[0].tiles, tileset.tiles);
+  });
+
   it("finds tiles and paths", () => {
     const tilesets = [{ firstgid: 1, columns: 2, image: "a.png", tilewidth: 16, tileheight: 16, tilecount: 4, margin: 1, spacing: 2 }, { firstgid: 5, tiles: [{ id: 1, image: "tree.png", imagewidth: 16, imageheight: 32 }] }];
     const found = tmj.findTileset(tilesets, (4 | FLIP_V) >>> 0);
@@ -276,5 +327,7 @@ describe("level editor map model", () => {
     assert.equal(tmj.formatG15(1 / 3), "0.333333333333333");
     assert.equal(tmj.formatG15(0.00001), "1e-05");
     assert.equal(tmj.formatG15(2.5), "2.5");
+    // A number 15 digits can't hold is written in full rather than rounded.
+    assert.equal(tmj.stringifyJson({ x: 0.1 + 0.2, y: 2.5 }, tmj.TILED_STYLE), '{ "x":0.30000000000000004,\n "y":2.5\n}');
   });
 });

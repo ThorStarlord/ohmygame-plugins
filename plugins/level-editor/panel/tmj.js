@@ -153,7 +153,10 @@ function scalar(value, style, holder, key) {
   if (typeof value === "string") return quote(value, style);
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return "null";
-    return style.kind === "standard" ? String(value) : formatG15(value);
+    if (style.kind === "standard") return String(value);
+    // Tiled's 15 digits, unless that would change the value.
+    const short = formatG15(value);
+    return Number(short) === value ? short : String(value);
   }
   if (value === true || value === false || value === null) return String(value);
   return "null";
@@ -477,34 +480,39 @@ export const isEditable = (map) => map.readOnly.length === 0;
 /**
  * The map's text to save: tile layers whose tiles changed are encoded again
  * (unchanged ones keep the exact text they had), then the whole map in its
- * own layout. Call `markSaved` once it is written.
+ * own layout. Call `markSaved` once it is written. The tiles are taken as
+ * they are when this is called; edits made while it encodes or while the
+ * file is written aren't in this text, and stay unsaved.
  */
 export async function serializeMap(map) {
   if (!isEditable(map)) throw new Error("this map can only be read here");
-  for (const [layer, tiles] of map.tiles) {
-    if (!tiles.gids) continue;
-    // Back as it was saved: a base64 layer keeps its exact text, which
-    // compressing again might not reproduce.
-    if (tiles.original && tiles.originalData !== undefined && sameData(tiles.gids, tiles.original)) {
+  // Every layer's tiles at one moment, before anything is awaited.
+  const snapshots = [...map.tiles].filter(([, tiles]) => tiles.gids).map(([layer, tiles]) => [layer, tiles, tiles.gids.slice()]);
+  const saved = new Map();
+  for (const [layer, tiles, gids] of snapshots) {
+    if (tiles.original && tiles.originalData !== undefined && sameData(gids, tiles.original)) {
+      // Back as it was saved: a base64 layer keeps its exact text, which
+      // compressing again might not reproduce.
       setKey(layer, "data", tiles.originalData);
-      continue;
-    }
-    if (Array.isArray(layer.data) && layer.data.length === tiles.gids.length && (!layer.encoding || layer.encoding === "csv")) {
-      tiles.gids.forEach((gid, i) => (layer.data[i] = gid));
-      continue;
-    }
-    setKey(layer, "data", await encodeData(tiles.gids, layer.encoding, layer.compression));
+    } else if (Array.isArray(layer.data) && layer.data.length === gids.length && (!layer.encoding || layer.encoding === "csv")) {
+      gids.forEach((gid, i) => (layer.data[i] = gid));
+    } else setKey(layer, "data", await encodeData(gids, layer.encoding, layer.compression));
+    saved.set(tiles, { gids, data: typeof layer.data === "string" ? layer.data : undefined });
   }
+  map.serialized = saved;
   return formatJson(map.doc, map.style);
 }
 
-/** After the text from `serializeMap` is written: what is on disk now. */
+/**
+ * After the text from the last `serializeMap` is written: what is on disk
+ * now, which is the tiles as they were serialized, not as they are now.
+ */
 export function markSaved(map) {
-  for (const [layer, tiles] of map.tiles) {
-    if (!tiles.gids) continue;
-    tiles.original = tiles.gids.slice();
-    tiles.originalData = typeof layer.data === "string" ? layer.data : undefined;
+  for (const [tiles, { gids, data }] of map.serialized ?? []) {
+    tiles.original = gids;
+    tiles.originalData = data;
   }
+  map.serialized = undefined;
 }
 
 function sameData(a, b) {
@@ -551,7 +559,7 @@ export function tileSource(tileset, id) {
       height: tileset.tileheight,
     };
   }
-  const tile = tileset.tiles?.find((entry) => entry.id === id);
+  const tile = tilesOf(tileset).find((entry) => entry.id === id);
   if (!tile?.image) return undefined;
   return {
     image: tile.image,
@@ -568,7 +576,20 @@ export function tileIds(tileset) {
     const count = tileset.tilecount ?? tileset.columns * Math.floor((tileset.imageheight ?? 0) / tileset.tileheight);
     return Array.from({ length: count }, (_, i) => i);
   }
-  return (tileset.tiles ?? []).filter((tile) => tile.image).map((tile) => tile.id).sort((a, b) => a - b);
+  return tilesOf(tileset).filter((tile) => tile.image).map((tile) => tile.id).sort((a, b) => a - b);
+}
+
+/**
+ * A tileset's `tiles` as a list of `{ id, … }`. Tiled before 1.2 wrote them
+ * as an object keyed by tile id; that is read here and never rewritten.
+ */
+export function tilesOf(tileset) {
+  const tiles = tileset?.tiles;
+  if (Array.isArray(tiles)) return tiles.filter(isContainer);
+  if (!isContainer(tiles)) return [];
+  return Object.entries(tiles)
+    .filter(([key, tile]) => isContainer(tile) && /^\d+$/.test(key))
+    .map(([key, tile]) => ({ ...tile, id: Number(key) }));
 }
 
 /** Columns and tile count of an image cut into `tilewidth` × `tileheight` tiles. */
@@ -866,6 +887,11 @@ export function setProperty(object, name, type, value) {
   } else list.push({ name, type, value });
   if (list.length && !Array.isArray(object.properties)) setKey(object, "properties", list);
   if (!list.length && Object.hasOwn(object, "properties")) delete object.properties;
+}
+
+/** The property called `name`, as the object has it now (an undo may have replaced it). */
+export function propertyNamed(object, name) {
+  return Array.isArray(object.properties) ? object.properties.find((property) => property.name === name) : undefined;
 }
 
 /** Renames a property, keeping its place, type and value. */
