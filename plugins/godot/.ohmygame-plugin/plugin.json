@@ -1,7 +1,7 @@
 {
   "$schema": "https://www.ohmygame.ai/schema/plugin-2.json",
   "id": "ohmygame/godot",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "engines": { "ohmygame-api": "^2.0.0" },
   "displayName": "%displayName%",
   "description": "%description%",
@@ -90,10 +90,20 @@
         "title": "%command.run%",
         "run": { "native": "runInGodot" },
         "slots": [{ "slot": "project.toolbar", "when": "project.plugin('ohmygame/godot')" }]
-      }
+      },
+      { "id": "settings-status", "title": "%command.status%", "run": { "native": "settingsStatus", "changesFiles": false } },
+      { "id": "install-web-templates", "title": "%command.installTemplates%", "run": { "native": "installWebTemplatesInBackground", "changesFiles": false } }
     ],
     "settings": {
-      "groups": [{ "rows": [{ "field": "godotPath" }, { "widget": "status" }] }]
+      "groups": [
+        {
+          "rows": [
+            { "field": "godotPath" },
+            { "widget": "status" },
+            { "title": "%command.installTemplates%", "description": "%command.installTemplates.description%", "action": { "command": "install-web-templates" } }
+          ]
+        }
+      ]
     }
   }
 }
