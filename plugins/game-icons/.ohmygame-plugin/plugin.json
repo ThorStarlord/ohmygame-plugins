@@ -1,0 +1,39 @@
+{
+  "$schema": "https://www.ohmygame.ai/schema/plugin-2.json",
+  "id": "ohmygame/game-icons",
+  "version": "0.1.0",
+  "engines": {
+    "ohmygame-api": "^2.5.0"
+  },
+  "displayName": "%plugin.name%",
+  "description": "%plugin.description%",
+  "longDescription": "%plugin.longDescription%",
+  "icon": "./assets/icon.svg",
+  "links": {
+    "homepage": "https://game-icons.net"
+  },
+  "categories": [
+    "art"
+  ],
+  "beta": true,
+  "entrypoints": {
+    "native": "./native/index.mjs"
+  },
+  "capabilities": {
+    "native": true
+  },
+  "contributes": {
+    "assetSources": [
+      {
+        "id": "icons",
+        "title": "%source.title%",
+        "description": "%source.description%",
+        "media": [
+          "image"
+        ],
+        "search": "search",
+        "fetch": "fetch"
+      }
+    ]
+  }
+}

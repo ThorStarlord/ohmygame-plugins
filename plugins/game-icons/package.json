@@ -1,0 +1,29 @@
+{
+  "name": "@ohmygame/game-icons",
+  "version": "0.1.0",
+  "description": "Add game icons from game-icons.net to the Library: about 4,000 SVG icons.",
+  "keywords": [
+    "ohmygame-plugin",
+    "library",
+    "icons",
+    "svg",
+    "game-icons"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WhiteTowerAI/ohmygame-plugins.git",
+    "directory": "plugins/game-icons"
+  },
+  "files": [
+    ".ohmygame-plugin",
+    "assets",
+    "locales",
+    "native",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "plugin.name": "Game icons",
+  "plugin.description": "Add game icons from game-icons.net to the Library: about 4,000 SVG icons.",
+  "plugin.longDescription": "Adds a Game icons tab to the Library with about 4,000 icons from game-icons.net: weapons, potions, skills, classes and status effects. Search in English; an added icon is a black SVG on a transparent background, ready to recolor. Most icons are CC BY 3.0, so credit the author kept with each one.",
+  "source.title": "Game icons",
+  "source.description": "Icons from game-icons.net, most under CC BY 3.0: credit the author shown with each one. Search in English, such as sword, potion or shield."
+}
