@@ -1,7 +1,7 @@
 {
   "$schema": "https://www.ohmygame.ai/schema/plugin-2.json",
   "id": "ohmygame/unreal-engine",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "engines": {
     "ohmygame-api": "^2.0.0"
   },
@@ -41,6 +41,8 @@
         "id": "unreal",
         "title": "%mcp.title%",
         "url": "${config.endpoint}",
+        "setup": "%mcp.setup%",
+        "docs": "https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-mcp-in-unreal-editor",
         "tools": [
           "list_toolsets",
           "describe_toolset",
