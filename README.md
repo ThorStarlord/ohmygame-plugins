@@ -42,12 +42,9 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
 - Local reference speech: [`gpt-sovits`](plugins/gpt-sovits), an optional Beta
   for an existing GPT-SoVITS server and a configured reference voice, with WAV
   output and saved-result recovery (requires host API 2.32).
-- Library sources, tabs on the Library page: [`game-icons`](plugins/game-icons)
-  adds game-icons.net's SVG icons with each author's credit,
-  [`openverse`](plugins/openverse) searches Openverse for openly licensed
-  music, sound effects and images, and [`pixel-sprites`](plugins/pixel-sprites)
-  searches 1.4 million AI-generated 16×16 pixel art sprites (optional Betas,
-  require OhMyGame API 2.5; collections, previews and cache durations need
+- Library source, a tab on the Library page: [`pixel-sprites`](plugins/pixel-sprites)
+  searches 1.4 million AI-generated 16×16 pixel art sprites (optional Beta,
+  requires OhMyGame API 2.5; collections, previews and cache durations need
   2.35).
 - Messaging connections: [`feishu`](plugins/feishu), an optional private-chat
   bot with an explicit allowed user, durable delivery tracking and approvals
