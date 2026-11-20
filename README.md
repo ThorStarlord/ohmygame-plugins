@@ -51,6 +51,9 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
   without an account, shows Sketchfab's own viewer on request, and adds a
   model as GLB once the person signs in with Sketchfab or pastes an API token
   (optional Beta, requires OhMyGame API 2.35).
+  [`pixel-sprites`](plugins/pixel-sprites) searches 1.4 million AI-generated
+  16×16 pixel art sprites (optional Beta, requires OhMyGame API 2.5;
+  collections, previews and cache durations need 2.35).
 - Messaging connections: [`feishu`](plugins/feishu), an optional private-chat
   bot with an explicit allowed user, durable delivery tracking and approvals
   kept in OhMyGame (Beta; use desktop Beta 5.8 or newer). Build it with
