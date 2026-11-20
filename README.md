@@ -46,10 +46,14 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
 - Local reference speech: [`gpt-sovits`](plugins/gpt-sovits), an optional Beta
   for an existing GPT-SoVITS server and a configured reference voice, with WAV
   output and saved-result recovery (requires host API 2.32).
-- Library source, a tab on the Library page: [`pixel-sprites`](plugins/pixel-sprites)
-  searches 1.4 million AI-generated 16×16 pixel art sprites (optional Beta,
-  requires OhMyGame API 2.5; collections, previews and cache durations need
-  2.35).
+- Library sources, tabs on the Library page: [`sketchfab`](plugins/sketchfab)
+  searches Sketchfab's downloadable 3D models under CC0, CC BY and CC BY-SA
+  without an account, shows Sketchfab's own viewer on request, and adds a
+  model as GLB once the person signs in with Sketchfab or pastes an API token
+  (optional Beta, requires OhMyGame API 2.35).
+  [`pixel-sprites`](plugins/pixel-sprites) searches 1.4 million AI-generated
+  16×16 pixel art sprites (optional Beta, requires OhMyGame API 2.5;
+  collections, previews and cache durations need 2.35).
 - Messaging connections: [`feishu`](plugins/feishu), an optional private-chat
   bot with an explicit allowed user, durable delivery tracking and approvals
   kept in OhMyGame (Beta; use desktop Beta 5.8 or newer). Build it with
