@@ -30,7 +30,7 @@ export function runSummary(run: GameTestRun): string {
       }
     }
   }
-  if (detailed) lines.push("The Tests panel shows the frame where each test failed; game_use can open the game to look at it.");
+  if (detailed) lines.push("The Automated tests panel shows the frame where each test failed; game_use can open the game to look at it.");
   return lines.join("\n");
 }
 

@@ -4,8 +4,20 @@
 
 const DIRECTORY = "tests/game";
 
-export const WRITE_PROMPT = `Write game tests for this game in ${DIRECTORY}/ as the game-tests skill says, then run them.`;
-export const ADD_MORE_PROMPT = `Add game tests for the rules and flows the tests in ${DIRECTORY}/ don't guard yet, as the game-tests skill says, then run them.`;
+/** The panel's languages, named for the agent. */
+const LANGUAGES = { en: "English", "zh-CN": "Simplified Chinese" };
+
+/**
+ * A test's name is what the panel lists, so it is written in the person's
+ * language. This request is in English, so the agent goes by what the person
+ * wrote in the conversation, then by the panel's language.
+ */
+const namesIn = (locale) =>
+  `Write each test's name in the language the person uses in this conversation, not this request's; when they haven't written in it yet, in ${LANGUAGES[locale] ?? LANGUAGES.en}.`;
+
+export const writePrompt = (locale) => `Write game tests for this game in ${DIRECTORY}/ as the game-tests skill says, then run them. ${namesIn(locale)}`;
+export const addMorePrompt = (locale) =>
+  `Add game tests for the rules and flows the tests in ${DIRECTORY}/ don't guard yet, as the game-tests skill says, then run them. ${namesIn(locale)}`;
 export const WRITE_UNIT_PROMPT =
   'Add unit tests for this game\'s rules that need no screen, such as which moves are allowed, scoring and winning, with a "test" script in package.json that runs them once. Then run them. When the game is wrong, fix the game, not the test, and say what was wrong.';
 

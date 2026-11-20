@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error The panel's own module is plain JavaScript.
-import { ADD_MORE_PROMPT, WRITE_PROMPT, fixFailurePrompt, fixUnitPrompt, statusOf } from "../../plugins/game-tests/panel/prompts.js";
+import { addMorePrompt, fixFailurePrompt, fixUnitPrompt, statusOf, writePrompt } from "../../plugins/game-tests/panel/prompts.js";
 
 describe("the panel's prompts and statuses", () => {
   it("asks for tests in a sentence, leaving the how to the skill", () => {
-    expect(WRITE_PROMPT).toBe("Write game tests for this game in tests/game/ as the game-tests skill says, then run them.");
-    expect(ADD_MORE_PROMPT).toContain("don't guard yet, as the game-tests skill says");
+    expect(writePrompt("en")).toMatch(/^Write game tests for this game in tests\/game\/ as the game-tests skill says, then run them\. /);
+    expect(addMorePrompt("en")).toContain("don't guard yet, as the game-tests skill says");
+  });
+
+  it("asks for test names in the person's language, then the panel's", () => {
+    const names = "Write each test's name in the language the person uses in this conversation, not this request's; when they haven't written in it yet, in";
+    expect(writePrompt("zh-CN")).toContain(`${names} Simplified Chinese.`);
+    expect(addMorePrompt("en")).toContain(`${names} English.`);
+    expect(writePrompt("fr")).toContain(`${names} English.`);
   });
 
   it("hands the agent where a test failed", () => {

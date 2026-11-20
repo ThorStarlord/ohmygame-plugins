@@ -223,7 +223,7 @@ describe("game test files", () => {
       const entries = await readGameTests(workspace);
       expect(entries.map((entry) => entry.file)).toEqual([
         { file: "a.json", error: expect.stringContaining("It isn't valid JSON") },
-        { file: "b.json", name: "Start and move", steps: 2, viewports: [{ width: 1280, height: 720 }] },
+        { file: "b.json", name: "Start and move", steps: 2, players: 1, viewports: [{ width: 1280, height: 720 }] },
       ]);
     });
   });
@@ -712,7 +712,7 @@ describe("shared setup", () => {
       await writeFile(path.join(workspace, "tests", "game", "setup", "two-players.json"), JSON.stringify(joined));
       await writeFile(path.join(workspace, "tests", "game", "deal.json"), JSON.stringify({ schemaVersion: 1, name: "Deal", players: 2, setup: "two-players", steps: [{ player: 1, expect: { state: { scene: "room" } } }] }));
       const entries = await readGameTests(workspace);
-      expect(entries.map((entry) => entry.file)).toEqual([{ file: "deal.json", name: "Deal", steps: 4, viewports: [{ width: 1280, height: 720 }] }]);
+      expect(entries.map((entry) => entry.file)).toEqual([{ file: "deal.json", name: "Deal", steps: 4, players: 2, viewports: [{ width: 1280, height: 720 }] }]);
     } finally {
       await rm(workspace, { recursive: true, force: true });
     }

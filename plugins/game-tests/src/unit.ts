@@ -10,6 +10,8 @@ import path from "node:path";
 export const UNIT_TEST_OUTPUT_CHARS = 64 * 1024;
 /** Failing tests a run lists by name. */
 export const UNIT_TEST_MAX_FAILURES = 50;
+/** Tests a run lists, passed or not. */
+export const UNIT_TEST_MAX_TESTS = 1000;
 /** How long a run, or installing the dependencies it needs, may take before it is stopped. */
 export const UNIT_TEST_TIMEOUT_MS = 5 * 60_000;
 
@@ -29,6 +31,19 @@ export interface UnitTestFailure {
   message?: string;
 }
 
+/** One test as the runner printed it, passed or not. */
+export interface UnitTestCase {
+  name: string;
+  /** The groups (`describe`s) it is in, outermost first. */
+  groups?: string[];
+  /** Its file, when the runner says. */
+  file?: string;
+  status: "passed" | "failed" | "skipped";
+  durationMs?: number;
+  /** Why it failed, when the runner says. */
+  message?: string;
+}
+
 export interface UnitTestRun {
   id: string;
   /** `error` when the tests couldn't be run at all, such as when installing failed. */
@@ -43,6 +58,8 @@ export interface UnitTestRun {
   passed?: number;
   failed?: number;
   failures?: UnitTestFailure[];
+  /** Every test the runner listed, in its order, when its output is one this plugin reads. */
+  tests?: UnitTestCase[];
   /** Why the tests couldn't be run, or didn't finish. */
   error?: string;
   /** The end of what the tests printed, without colors. */
@@ -118,7 +135,7 @@ class Output {
  * plugin reads (Node's test runner as TAP or spec, Vitest, Jest and Bun).
  * Anything else leaves them out, and the exit code alone says how it went.
  */
-export function readUnitTestOutput(output: string): Pick<UnitTestRun, "passed" | "failed" | "failures"> {
+export function readUnitTestOutput(output: string): Pick<UnitTestRun, "passed" | "failed" | "failures" | "tests"> {
   const text = output.replace(ANSI, "");
   const number = (pattern: RegExp) => {
     const match = pattern.exec(text);
@@ -174,11 +191,166 @@ export function readUnitTestOutput(output: string): Pick<UnitTestRun, "passed" |
       add(match[2]!, value && /^[|>][-+]?$/.test(value) ? continued() : value?.replace(/^(['"])(.*)\1$/, "$2"));
     }
   });
+  // A list that has fewer tests than the runner counted, such as one that
+  // names only failures, would say the others weren't there.
+  const listed = readUnitTestList(text);
+  const counted = (passed ?? 0) + (failed ?? 0);
+  const tests = listed.filter((test) => test.status !== "skipped").length >= counted ? listed : [];
+  // A failing test's message, from the failure that names it.
+  for (const test of tests) {
+    if (test.status !== "failed" || test.message) continue;
+    const found = [...failures.values()].find((failure) => failure.name === test.name || /(?: > | › )/.test(failure.name) && failure.name.split(/ > | › /).at(-1) === test.name);
+    if (found?.message) test.message = found.message;
+  }
+  passed ??= tests.length ? tests.filter((test) => test.status === "passed").length : undefined;
+  failed ??= tests.length ? tests.filter((test) => test.status === "failed").length : undefined;
   return {
     ...(passed !== undefined ? { passed } : {}),
     ...(failed !== undefined ? { failed } : {}),
     ...(failures.size ? { failures: [...failures.values()] } : {}),
+    ...(tests.length ? { tests } : {}),
   };
+}
+
+const TEST_FILE = /^\S*?[^\s/]+[._-](?:test|spec)\.[cm]?[jt]sx?$/;
+const ms = (value: string | undefined, unit = "ms") => (value === undefined ? undefined : Number(value) * (unit === "s" ? 1000 : 1));
+const indentOf = (line: string) => /^\s*/.exec(line)![0].length;
+/** The groups open at a line's indent: those that started less indented. */
+const groupsAt = (stack: { indent: number; name: string }[], indent: number) => {
+  while (stack.length && stack.at(-1)!.indent >= indent) stack.pop();
+  return stack.map((item) => item.name);
+};
+
+/**
+ * Every test a run's output lists, passed, failed or skipped: Node's test
+ * runner as TAP or spec, Vitest's verbose reporter, Jest's verbose output and
+ * Bun. Groups that pass or fail with their tests aren't tests.
+ */
+export function readUnitTestList(text: string): UnitTestCase[] {
+  const tests: UnitTestCase[] = [];
+  const add = (test: UnitTestCase) => {
+    if (tests.length >= UNIT_TEST_MAX_TESTS || !test.name.trim()) return;
+    tests.push({
+      name: test.name.trim(),
+      ...(test.groups?.length ? { groups: test.groups } : {}),
+      ...(test.file ? { file: test.file } : {}),
+      status: test.status,
+      ...(test.durationMs !== undefined && Number.isFinite(test.durationMs) ? { durationMs: test.durationMs } : {}),
+      ...(test.message ? { message: test.message } : {}),
+    });
+  };
+  const lines = text.split("\n");
+  const subtests: { indent: number; name: string }[] = [];
+  const suites: { indent: number; name: string }[] = [];
+  const groups: { indent: number; name: string }[] = [];
+  let file: string | undefined;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]!;
+    let match: RegExpExecArray | null;
+    // Node's spec reporter repeats the failures after its summary.
+    if (line.startsWith("✖ failing tests:")) break;
+
+    // Node, TAP: "# Subtest: name", then "ok 1 - name" and a YAML block.
+    if ((match = /^(\s*)# Subtest: (.+)$/.exec(line))) {
+      groupsAt(subtests, match[1]!.length);
+      subtests.push({ indent: match[1]!.length, name: match[2]! });
+      continue;
+    }
+    if ((match = /^(\s*)(not ok|ok) \d+ - (.+?)(?: # (SKIP|TODO)\b.*)?$/i.exec(line))) {
+      const block: string[] = [];
+      if (lines[index + 1]?.trim() === "---") for (const item of lines.slice(index + 2)) {
+        if (item.trim() === "...") break;
+        block.push(item);
+      }
+      const parents = groupsAt(subtests, match[1]!.length);
+      if (block.some((item) => /^\s*type: 'suite'/.test(item))) continue;
+      const duration = block.map((item) => /^\s*duration_ms: ([\d.]+)/.exec(item)?.[1]).find(Boolean);
+      add({ name: match[3]!, groups: parents, status: match[4] ? "skipped" : match[2] === "ok" ? "passed" : "failed", durationMs: ms(duration) });
+      continue;
+    }
+
+    // Node, spec: "▶ group", then "✔ name (0.2ms)", then the group's own line.
+    if ((match = /^(\s*)▶ (.+?)(?: \([\d.]+m?s\))?$/.exec(line))) {
+      const indent = match[1]!.length;
+      const open = suites.at(-1);
+      if (open?.indent === indent && open.name === match[2]) suites.pop();
+      else {
+        groupsAt(suites, indent);
+        suites.push({ indent, name: match[2]! });
+      }
+      continue;
+    }
+    if ((match = /^(\s*)([✔✖﹣]) (.+?) \(([\d.]+)(m?s)\)(?: # (SKIP|TODO)\b.*)?$/.exec(line))) {
+      const indent = match[1]!.length;
+      const open = suites.at(-1);
+      if (open?.indent === indent && open.name === match[3]) {
+        suites.pop();
+        continue;
+      }
+      add({ name: match[3]!, groups: groupsAt(suites, indent), status: match[2] === "﹣" || match[6] ? "skipped" : match[2] === "✔" ? "passed" : "failed", durationMs: ms(match[4], match[5]) });
+      continue;
+    }
+
+    // Bun: "tests/rules.test.ts:", then "(pass) group > name [0.12ms]".
+    if ((match = /^(\S+):$/.exec(line)) && TEST_FILE.test(match[1]!)) {
+      file = match[1];
+      continue;
+    }
+    if ((match = /^\((pass|fail|skip|todo)\) (.+?)(?: \[([\d.]+)(m?s)\])?$/.exec(line))) {
+      const path = match[2]!.split(" > ");
+      add({ name: path.pop()!, groups: path, file, status: match[1] === "pass" ? "passed" : match[1] === "fail" ? "failed" : "skipped", durationMs: ms(match[3], match[4]) });
+      continue;
+    }
+
+    // Jest: "PASS ./rules.test.js", group lines, then "✓ name (3 ms)".
+    if ((match = /^(PASS|FAIL) +(\S+)/.exec(line))) {
+      file = match[2]!.replace(/^\.\//, "");
+      groups.length = 0;
+      continue;
+    }
+    if ((match = /^(\s+)([✓✕○✎]) (?:(skipped|todo) )?(.+?)(?: \((\d+) ms\))?$/.exec(line))) {
+      const indent = match[1]!.length;
+      const path = match[4]!.split(" > ");
+      // Vitest's verbose reporter: "✓ rules.test.ts > group > name 1ms".
+      if (path.length > 1 && TEST_FILE.test(path[0]!)) {
+        const last = path.pop()!.replace(/ (\d+(?:\.\d+)?)(m?s)$/, "");
+        const duration = / (\d+(?:\.\d+)?)(m?s)$/.exec(match[4]!);
+        add({ name: last, groups: path.slice(1), file: path[0], status: match[2] === "✓" ? "passed" : match[2] === "✕" ? "failed" : "skipped", durationMs: ms(duration?.[1], duration?.[2]) });
+        continue;
+      }
+      add({ name: match[4]!, groups: groupsAt(groups, indent), file, status: match[2] === "✓" ? "passed" : match[2] === "✕" ? "failed" : "skipped", durationMs: ms(match[5]) });
+      continue;
+    }
+    // Vitest marks failures with × and skips with ↓; its passes use ✓, read above.
+    if ((match = /^\s*([×↓]) (\S+) > (.+?)(?: (\d+(?:\.\d+)?)(m?s))?$/.exec(line)) && TEST_FILE.test(match[2]!)) {
+      const path = match[3]!.split(" > ");
+      const next = lines[index + 1]?.trim();
+      add({ name: path.pop()!, groups: path, file: match[2], status: match[1] === "×" ? "failed" : "skipped", durationMs: ms(match[4], match[5]), message: next?.startsWith("→ ") ? next.slice(2) : undefined });
+      continue;
+    }
+    // A group, in Jest's verbose output: an indented line within a file's results.
+    if (file && /^\s+\S/.test(line) && !/^\s*[●›→]/.test(line) && groups !== undefined) {
+      const indent = indentOf(line);
+      const name = line.trim();
+      if (!/^(Tests|Test Suites|Snapshots|Time):/.test(name)) {
+        groupsAt(groups, indent);
+        groups.push({ indent, name });
+      }
+    }
+  }
+  return tests;
+}
+
+/**
+ * What makes the script's runner name every test: Vitest and Jest list only
+ * failures unless asked. Only for a script that is that runner alone, where
+ * extra arguments reach it; npm passes them after `--`.
+ */
+export function listingArguments(script: string, manager: PackageManager): string[] {
+  if (/[;&|<>`$]/.test(script)) return [];
+  const runner = /^(?:npx\s+|bunx\s+|pnpm\s+(?:exec\s+)?|yarn\s+)?(vitest|jest)(?:\s|$)/.exec(script.trim())?.[1];
+  const extra = runner === "vitest" ? ["--reporter=verbose"] : runner === "jest" ? ["--verbose"] : [];
+  return extra.length && manager === "npm" ? ["--", ...extra] : extra;
 }
 
 class Cancelled extends Error {}
@@ -268,7 +440,7 @@ export class UnitTests {
           run.phase = "testing";
           changed();
         }
-        const code = await runCommand(found.manager, ["run", "test"], found.folder, output, controller.signal, timeoutMs);
+        const code = await runCommand(found.manager, ["run", "test", ...listingArguments(found.script, found.manager)], found.folder, output, controller.signal, timeoutMs);
         Object.assign(run, readUnitTestOutput(output.text), { exitCode: code, status: code === 0 ? "passed" : "failed" });
       } catch (cause) {
         if (controller.signal.aborted || cause instanceof Cancelled) run.status = "cancelled";

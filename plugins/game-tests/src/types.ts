@@ -76,6 +76,8 @@ export interface GameTestFile {
   file: string;
   name?: string;
   steps?: number;
+  /** Players the test opens, 1 for a single-player test. */
+  players?: number;
   viewports?: PlaytestViewport[];
   error?: string;
 }

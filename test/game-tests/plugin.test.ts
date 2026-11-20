@@ -56,7 +56,7 @@ describe("the plugin", () => {
     const summary = await tool({ operation: "run" }, call);
     expect(summary).toContain("1 of 2 game tests passed.");
     expect(summary).toContain('FAILED b.json "Score is 20" at 1280x720: step 1: state score is 10, expected 20');
-    expect(summary).toContain("The Tests panel shows the frame");
+    expect(summary).toContain("The Automated tests panel shows the frame");
     expect(progress).toContain("Running 2 of 2");
   });
 
@@ -69,6 +69,9 @@ describe("the plugin", () => {
     const captureId = state.game.run.scenarios[0]!.viewports[0]!.steps[0]!.captureId!;
     expect(await commands.get("capture")!({ runId: state.game.run.id, captureId }, call)).toEqual({ mediaType: "image/jpeg", data: "ZnJhbWU=" });
     expect(await commands.get("capture")!({ runId: "old", captureId }, call)).toBeNull();
+    // A test's steps, for its details.
+    expect(await commands.get("detail")!({ file: "a.json" }, call)).toMatchObject({ name: "Score is 10", steps: [{ expect: { state: { score: 10 } } }] });
+    expect(await commands.get("detail")!({ file: "missing.json" }, call)).toBeNull();
   });
 
   it("says plainly why a run can't start", async () => {

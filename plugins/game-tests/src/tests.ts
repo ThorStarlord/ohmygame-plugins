@@ -69,7 +69,7 @@ export async function readGameTests(folder: string): Promise<GameTestEntry[]> {
       try {
         const scenario = parseGameTest(await readText(path.join(directory, file)), setups);
         return {
-          file: { file, name: scenario.name, steps: (scenario.setupSteps?.length ?? 0) + scenario.steps.length, viewports: scenario.viewports ?? [GAME_TEST_DEFAULT_VIEWPORT] },
+          file: { file, name: scenario.name, steps: (scenario.setupSteps?.length ?? 0) + scenario.steps.length, players: scenario.players ?? 1, viewports: scenario.viewports ?? [GAME_TEST_DEFAULT_VIEWPORT] },
           scenario,
         };
       } catch (cause) {
@@ -107,6 +107,11 @@ export class GameTests {
     const files = (await readGameTests(this.folder)).map((entry) => entry.file);
     const run = this.#current?.run;
     return { files, ...(run ? { run: structuredClone(run) } : {}) };
+  }
+
+  /** A test file's scenario, its setup's steps first, for the panel's details; undefined when the file can't be read. */
+  async detail(file: string): Promise<ParsedGameTest | undefined> {
+    return (await readGameTests(this.folder)).find((entry) => entry.file.file === file)?.scenario;
   }
 
   /** Starts a run of the named files, or all of them. The returned run finishes with `done`. */

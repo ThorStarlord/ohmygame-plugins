@@ -52,8 +52,8 @@ publisher only OhMyGame can use, and is plugin `ohmygame/<folder>`:
   `npm run build:feishu` only for local development.
 - Testing: [`game-tests`](plugins/game-tests), an optional Beta that keeps a
   web game's tests in `tests/game/`, runs them in real game windows with up to
-  four players, and shows them with the project's unit tests in a Tests panel
-  (requires OhMyGame API 2.35). Build it with `npm run build:game-tests` for
+  four players, and shows them with the project's unit tests in an Automated
+  tests panel (requires OhMyGame API 2.35). Build it with `npm run build:game-tests` for
   source development.
 - Desktop interaction: [`computer-use`](plugins/computer-use), an optional
   local MCP connection with revocable per-app consent on macOS and per-call

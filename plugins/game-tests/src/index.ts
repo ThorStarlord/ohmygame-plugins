@@ -4,7 +4,7 @@ import { filesSummary, runSummary } from "./summary.ts";
 import { GameTests } from "./tests.ts";
 import { UnitTestError, UnitTests } from "./unit.ts";
 
-// The Tests panel's native side and the agent's game_test tool. Both use one
+// The Automated tests panel's native side and the agent's game_test tool. Both use one
 // GameTests per project host, so the panel shows the agent's runs too.
 
 const files = (input: unknown): string[] | undefined => {
@@ -55,6 +55,10 @@ export function activate(context: PluginContext): void {
   context.registerCommand("cancel", async () => {
     await game.cancel();
     return null;
+  });
+  context.registerCommand("detail", async (input) => {
+    const file = (input as { file?: unknown } | undefined)?.file;
+    return typeof file === "string" ? ((await game.detail(file)) ?? null) : null;
   });
   context.registerCommand("capture", async (input) => {
     const { runId, captureId } = (input ?? {}) as { runId?: string; captureId?: string };

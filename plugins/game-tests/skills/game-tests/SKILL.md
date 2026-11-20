@@ -29,6 +29,13 @@ and add what they don't guard yet. Run `game_test`; when the game is wrong,
 fix the game, not the test, and say what was wrong. End by listing each test
 and the rule or flow it guards.
 
+The Automated tests panel lists each test by its `name`, so write the name in the
+language the person uses with you: English when they write in English,
+Spanish when they write in Spanish. Before they have written to you, use
+the language the request names, as the panel's buttons do, or English. File
+names, `data-testid`s and state paths stay
+as the game has them.
+
 ## The file
 
 Each game test is one JSON file in `tests/game/`, such as

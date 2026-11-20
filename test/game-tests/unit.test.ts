@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { readUnitTestOutput, UnitTestError, UnitTests, type UnitTestRun } from "../../plugins/game-tests/src/unit.ts";
+import { listingArguments, readUnitTestOutput, UnitTestError, UnitTests, type UnitTestRun } from "../../plugins/game-tests/src/unit.ts";
 
 // Excerpts of what each runner prints with no terminal attached.
 const NODE_TAP = `TAP version 13
@@ -102,6 +102,43 @@ const BUN = `error: boom
 Ran 4 tests across 1 file. [28.00ms]
 `;
 
+// With their tests listed: Vitest's verbose reporter, Jest's --verbose, and Bun.
+const VITEST_VERBOSE = ` RUN  v5.0.5 /game
+
+ ✓ rules.test.ts > bomb beats pair 1ms
+ × rules.test.ts > turns > cannot pass first 2ms
+   → boom
+ ↓ rules.test.ts > turns > later
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 1 skipped (3)
+`;
+const JEST_VERBOSE = `PASS ./cards.test.js
+  ✓ bomb beats pair (3 ms)
+FAIL ./rules.test.js
+  turns
+    ✓ starts with player one (1 ms)
+    ✕ cannot pass first (2 ms)
+    ○ skipped later
+
+  ● turns › cannot pass first
+
+    boom
+
+Tests:       1 failed, 1 skipped, 2 passed, 4 total
+`;
+const BUN_FULL = `tests/rules.test.ts:
+(pass) bomb beats pair [0.12ms]
+error: boom
+(fail) turns > cannot pass first [0.05ms]
+(skip) turns > later
+
+ 1 pass
+ 1 skip
+ 1 fail
+Ran 3 tests across 1 file. [28.00ms]
+`;
+
 describe("reading a unit test run's output", () => {
   it("reads Node's test runner as TAP, leaving out groups that fail with their tests", () => {
     expect(readUnitTestOutput(NODE_TAP)).toEqual({
@@ -111,6 +148,12 @@ describe("reading a unit test run's output", () => {
         { name: "three of a kind needs three", message: "1 == 2" },
         { name: "cannot pass first", message: "boom" },
         { name: "four of a kind is a bomb", message: "Expected values to be strictly equal: 4 !== 5" },
+      ],
+      tests: [
+        { name: "bomb beats pair", status: "passed", durationMs: 0.256208 },
+        { name: "three of a kind needs three", status: "failed", durationMs: 0.578708, message: "1 == 2" },
+        { name: "cannot pass first", groups: ["turns"], status: "failed", message: "boom" },
+        { name: "four of a kind is a bomb", groups: ["turns"], status: "failed", message: "Expected values to be strictly equal: 4 !== 5" },
       ],
     });
   });
@@ -122,6 +165,11 @@ describe("reading a unit test run's output", () => {
       failures: [
         { name: "three of a kind needs three", message: "AssertionError [ERR_ASSERTION]: 1 == 2" },
         { name: "cannot pass first", message: "Error: boom" },
+      ],
+      tests: [
+        { name: "bomb beats pair", status: "passed", durationMs: 0.254125 },
+        { name: "three of a kind needs three", status: "failed", durationMs: 0.296, message: "AssertionError [ERR_ASSERTION]: 1 == 2" },
+        { name: "cannot pass first", groups: ["turns"], status: "failed", durationMs: 0.033, message: "Error: boom" },
       ],
     });
   });
@@ -136,7 +184,38 @@ describe("reading a unit test run's output", () => {
       ],
     });
     expect(readUnitTestOutput(JEST)).toEqual({ passed: 3, failed: 1, failures: [{ name: "turns › cannot pass first", message: "boom" }] });
+    // Bun's excerpt names only the failure, fewer than it counted, so there is no list.
     expect(readUnitTestOutput(BUN)).toEqual({ passed: 3, failed: 1, failures: [{ name: "turns > cannot pass first" }] });
+  });
+
+  it("lists every test Vitest, Jest and Bun name, with their files and groups", () => {
+    expect(readUnitTestOutput(VITEST_VERBOSE).tests).toEqual([
+      { name: "bomb beats pair", file: "rules.test.ts", status: "passed", durationMs: 1 },
+      { name: "cannot pass first", groups: ["turns"], file: "rules.test.ts", status: "failed", durationMs: 2, message: "boom" },
+      { name: "later", groups: ["turns"], file: "rules.test.ts", status: "skipped" },
+    ]);
+    expect(readUnitTestOutput(JEST_VERBOSE).tests).toEqual([
+      { name: "bomb beats pair", file: "cards.test.js", status: "passed", durationMs: 3 },
+      { name: "starts with player one", groups: ["turns"], file: "rules.test.js", status: "passed", durationMs: 1 },
+      { name: "cannot pass first", groups: ["turns"], file: "rules.test.js", status: "failed", durationMs: 2, message: "boom" },
+      { name: "later", groups: ["turns"], file: "rules.test.js", status: "skipped" },
+    ]);
+    expect(readUnitTestOutput(BUN_FULL)).toMatchObject({
+      passed: 1,
+      failed: 1,
+      tests: [
+        { name: "bomb beats pair", file: "tests/rules.test.ts", status: "passed", durationMs: 0.12 },
+        { name: "cannot pass first", groups: ["turns"], file: "tests/rules.test.ts", status: "failed", durationMs: 0.05 },
+        { name: "later", groups: ["turns"], file: "tests/rules.test.ts", status: "skipped" },
+      ],
+    });
+  });
+
+  it("asks Vitest and Jest to name every test when the script is the runner alone", () => {
+    expect(listingArguments("vitest run", "npm")).toEqual(["--", "--reporter=verbose"]);
+    expect(listingArguments("npx jest --ci", "pnpm")).toEqual(["--verbose"]);
+    expect(listingArguments("vitest run && eslint .", "npm")).toEqual([]);
+    expect(listingArguments("tsx --test tests/*.test.ts", "npm")).toEqual([]);
   });
 
   it("says nothing it can't read", () => {

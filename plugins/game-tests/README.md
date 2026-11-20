@@ -15,13 +15,18 @@ them in real game windows, multiplayer included. It needs OhMyGame plugin API
   in `tests/game/setup/`.
 - **The agent** gets the `game_test` tool and the `game-tests` skill, which
   gives the file format and what to test first: the game's rules as players
-  meet them, then flows, then screens. Its instructions ask it to run the tests
-  after it changes a game that has them.
-- **The Tests panel** lists the tests, runs all or one, and shows where one
-  failed: the step, what was wrong, the frame and the console. It also runs the
-  project's own unit tests, its package.json `test` script, and reads the
-  counts and failing tests of Node's test runner, Vitest, Jest and Bun; other
-  runners show their output and exit code. Its buttons put a request for the
+  meet them, then flows, then screens. It names each test in the language the
+  person writes to it in, which is what the panel lists. Its instructions ask
+  it to run the tests after it changes a game that has them.
+- **The Automated tests panel** opens from **Automated tests** in the ⋯ menu
+  of the Game panel, or the panel menu, rather than on its own. It lists the
+  tests, runs all or one, and shows where one failed: the step, what was
+  wrong, the frame and the console. It also runs the
+  project's own unit tests, its package.json `test` script, and lists each
+  test with its result, by file where the runner says, for Node's test
+  runner, Vitest, Jest and Bun. It asks Vitest and Jest to name every test
+  when the script runs one of them alone; other runners show their failures
+  or their output and exit code. Its buttons put a request for the
   agent in the composer: write tests, add more, fix a failure.
 
 ## Limits
