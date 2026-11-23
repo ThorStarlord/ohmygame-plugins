@@ -188,8 +188,9 @@ All three files are read every run, and one that doesn't parse fails it, so a ty
 quietly unblock a repository. The tests check them too, so a pull request that breaks one
 fails CI before it's merged, and the last good index stays up meanwhile.
 
-- `blocked.json` is a list of `{ "repository": "owner/repo", "version": "1.0.0", "reason": "…" }`.
-  Leave out `version` to block every version. A blocked version stays in the index,
+- `blocked.json` is a list of `{ "repository": "owner/repo", "plugin": "owner/name", "version": "1.0.0", "reason": "…" }`.
+  Leave out `version` to block every version, and `plugin` to block every plugin
+  of the repository. A blocked version stays in the index with its plugin,
   rejected with `blocked: <reason>` and without a release, so the app can say why it's gone.
 - `featured.json` is a list of plugin ids, like `"acme/tiles"`.
 - `categories.json` maps plugin ids to one to three categories the app knows, like

@@ -52,13 +52,17 @@ describe("blocked.json, featured.json and categories.json", () => {
     assert.equal(versions[0]!.plugin!.categories, undefined);
   });
 
-  it("block a whole repository or one version, keeping it in the index without its plugin", () => {
-    const versions = [version("a/b", "1.0.0", "1"), version("a/b", "2.0.0", "2"), version("A/c", "1.0.0", "1")];
+  it("block a whole repository, one of its plugins or one version, keeping it in the index with its plugin", () => {
+    const versions = [version("a/b", "1.0.0", "1", "a/b"), version("a/b", "2.0.0", "2", "a/b"), version("A/c", "1.0.0", "1", "a/c")];
     // GitHub ignores case in a repository's name, so blocks do too.
     const blocked = applyBlocks(versions, [{ repository: "a/b", version: "2.0.0", reason: "broken" }, { repository: "a/C", reason: "malware" }]);
-    assert.ok(blocked[0]!.plugin);
-    assert.deepEqual([blocked[1]!.plugin, blocked[1]!.rejected], [undefined, ["blocked: broken"]]);
-    assert.deepEqual([blocked[2]!.plugin, blocked[2]!.rejected], [undefined, ["blocked: malware"]]);
+    assert.equal(blocked[0]!.rejected, undefined);
+    assert.deepEqual([blocked[1]!.plugin?.id, blocked[1]!.rejected], ["a/b", ["blocked: broken"]]);
+    assert.deepEqual([blocked[2]!.plugin?.id, blocked[2]!.rejected], ["a/c", ["blocked: malware"]]);
+    // In a repository holding several plugins, a block names the one it means.
+    const shared = [version("a/b", "1.0.0", "1", "a/b"), version("a/b", "1.0.0", "1", "a/other")];
+    assert.deepEqual(applyBlocks(shared, [{ repository: "a/b", plugin: "a/other", version: "1.0.0", reason: "broken" }]).map((item) => item.rejected), [undefined, ["blocked: broken"]]);
+    assert.deepEqual(featuredPlugins(["a/b", "a/c"], blocked), ["a/b"]);
   });
 
   it("feature only what can be installed, in the file's order", () => {

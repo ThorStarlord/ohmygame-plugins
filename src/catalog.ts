@@ -6,10 +6,12 @@ import type { IndexedVersion } from "./checks.ts";
 const PLUGIN_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
-/** One line of blocked.json: a repository, or one of its versions. */
+/** One line of blocked.json: a repository, or one of its plugins or versions. */
 export interface Block {
   /** `owner/repo`; matched without regard to case, as GitHub does. */
   repository: string;
+  /** One plugin of a repository that holds several. */
+  plugin?: string;
   version?: string;
   reason: string;
 }
@@ -22,15 +24,16 @@ export function parseBlocked(text: string): Block[] {
   const list: unknown = JSON.parse(text);
   if (!Array.isArray(list)) throw new Error("blocked.json must be a list");
   return list.map((item, index) => {
-    const { repository, version, reason, ...rest } = (item ?? {}) as Record<string, unknown>;
+    const { repository, plugin, version, reason, ...rest } = (item ?? {}) as Record<string, unknown>;
     if (
       typeof repository !== "string" || !REPOSITORY.test(repository) ||
       typeof reason !== "string" || !reason.trim() ||
+      (plugin !== undefined && (typeof plugin !== "string" || !PLUGIN_ID.test(plugin))) ||
       (version !== undefined && (typeof version !== "string" || !EXACT_VERSION.test(version))) ||
       Object.keys(rest).length
     )
-      throw new Error(`blocked.json entry ${index} must have repository, reason and optionally version`);
-    return { repository, reason, ...(version !== undefined ? { version: version as string } : {}) };
+      throw new Error(`blocked.json entry ${index} must have repository, reason and optionally plugin and version`);
+    return { repository, reason, ...(plugin !== undefined ? { plugin: plugin as string } : {}), ...(version !== undefined ? { version: version as string } : {}) };
   });
 }
 
@@ -71,11 +74,16 @@ export function applyCategories(versions: IndexedVersion[], categories: Record<s
   });
 }
 
-/** A blocked version stays in the index, so the app can say why it's gone. */
+/**
+ * A blocked version stays in the index, with the plugin it holds, so the app
+ * can say why it's gone, and a block on one plugin of a repository holding
+ * several doesn't reach the others.
+ */
 export function applyBlocks(versions: IndexedVersion[], blocks: Block[]): IndexedVersion[] {
   return versions.map((version) => {
-    const block = blocks.find((item) => item.repository.toLowerCase() === version.repository.toLowerCase() && (item.version === undefined || item.version === version.version));
-    return block ? reject(version, `blocked: ${block.reason}`) : version;
+    const block = blocks.find((item) => item.repository.toLowerCase() === version.repository.toLowerCase()
+      && (item.plugin === undefined || item.plugin === version.plugin?.id) && (item.version === undefined || item.version === version.version));
+    return block ? { ...version, rejected: [...(version.rejected ?? []), `blocked: ${block.reason}`] } : version;
   });
 }
 
@@ -127,7 +135,7 @@ export function applyVersionClaims(versions: IndexedVersion[]): IndexedVersion[]
 
 /** The featured plugins someone can install, in the file's order. */
 export function featuredPlugins(featured: string[], versions: IndexedVersion[]): string[] {
-  const available = new Set(versions.flatMap((version) => (version.plugin ? [version.plugin.id] : [])));
+  const available = new Set(versions.flatMap((version) => (version.plugin && !version.rejected ? [version.plugin.id] : [])));
   return featured.filter((id) => available.has(id));
 }
 
