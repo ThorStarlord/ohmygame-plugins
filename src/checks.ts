@@ -207,8 +207,8 @@ export async function judgeArchive(app: AppChecks, bytes: Buffer, expected: Expe
     try {
       root = await unpackArchive(app, archive, staging);
     } catch (error) {
-      if (error instanceof ArchiveError) return { rejected: [`the archive ${error.message}`] };
-      throw error;
+      // Anything else unpacking it throws, such as corrupt compressed data, comes from the archive too.
+      return { rejected: [error instanceof ArchiveError ? `the archive ${error.message}` : `the archive can't be unpacked: ${(error as Error).message}`] };
     }
     return await judgePackage(app, root, expected, save);
   } finally {

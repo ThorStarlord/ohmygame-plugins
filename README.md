@@ -121,8 +121,9 @@ packing an official plugin follows, leave out `.gitignore` files.
 
 Every 30 minutes, `.github/workflows/index.yml`:
 
-1. finds public repositories with the topic, and their releases; GitHub not
-   answering fails the run, so a partial index is never published;
+1. finds public repositories with the topic (GitHub's search gives at most
+   1,000), and their releases; GitHub not answering, or a search that timed
+   out, fails the run, so a partial index is never published;
 2. downloads each new release's `.zip` asset, or its tag's source from
    `codeload.github.com`;
 3. unpacks it with the app's own code, within the app's unpacked size and file

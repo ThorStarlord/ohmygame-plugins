@@ -183,5 +183,10 @@ describe("judgeArchive", () => {
     assert.deepEqual((await judge(zip({ "package.json": "{}", "big.txt": "x".repeat(4096) }), ACME, small)).rejected, ["the archive is unusable (too-large)"]);
     assert.deepEqual((await judge(plugin(), ACME, small)).rejected, ["the archive is unusable (too-large)"]);
     assert.deepEqual((await judge(Buffer.from("not a zip"))).rejected, ["the archive is unusable (invalid-zip)"]);
+    // Corrupt compressed data rejects the release, not the whole run.
+    const corrupt = await zip({ ...files(), "big.txt": "x".repeat(5000) });
+    const at = corrupt.indexOf("big.txt") + "big.txt".length + 2;
+    corrupt[at] = corrupt[at]! ^ 0xff;
+    assert.match((await judge(corrupt)).rejected![0]!, /^the archive /);
   });
 });

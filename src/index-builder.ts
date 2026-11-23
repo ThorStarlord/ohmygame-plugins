@@ -154,7 +154,8 @@ export async function buildIndex(options: BuildOptions): Promise<{ index: unknow
       const present = await Promise.all([...imagesOf(cached.verdict).map((file) => exists(at(file))), ...(cached.verdict.plugin ? [exists(archiveAt(cached))] : [])]);
       if (present.every(Boolean)) return cached;
     }
-    const commit = cached?.release === release.id ? cached.commit : await github.commit(repository.owner, repository.repo, release.tag);
+    // Read again whenever the archive is, so a tag moved since is followed.
+    const commit = await github.commit(repository.owner, repository.repo, release.tag);
     const base = { release: release.id, version: tag.version, archive: archiveKey, commit, checks };
     const source = releaseArchive(repository, release, commit);
     if ("issue" in source) return { ...base, verdict: { rejected: [source.issue] } };

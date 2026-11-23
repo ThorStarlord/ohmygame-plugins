@@ -103,6 +103,8 @@ export function githubApi(fetch: Fetch, token = process.env.GITHUB_TOKEN): GitHu
       // Search gives at most 1000 results, 100 a page.
       for (let page = 1; page <= 10; page++) {
         const data = await get(`${API}/search/repositories?q=${encodeURIComponent(`topic:${topic} is:public fork:false`)}&sort=updated&per_page=100&page=${page}`);
+        // A search that timed out answers with what it found so far; publishing that would drop the rest.
+        if (data.incomplete_results === true) throw new Error("GitHub's search timed out before finding every repository");
         const items: any[] = Array.isArray(data.items) ? data.items : [];
         for (const item of items) {
           const avatar = item.owner?.avatar_url;

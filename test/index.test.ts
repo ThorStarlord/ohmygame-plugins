@@ -6,7 +6,7 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 import { loadAppChecks, type AppChecks } from "../src/checks.ts";
-import { parseTag, type FoundRelease, type FoundRepository, type GitHubApi } from "../src/github.ts";
+import { githubApi, parseTag, type FoundRelease, type FoundRepository, type GitHubApi } from "../src/github.ts";
 import { buildIndex, DownloadError, type CachedRelease } from "../src/index-builder.ts";
 import { signingKey } from "../src/signing.ts";
 import { zip } from "./zip.ts";
@@ -78,6 +78,13 @@ describe("parseTag", () => {
     assert.deepEqual(parseTag("v1.2.0-beta.1"), { version: "1.2.0-beta.1" });
     assert.deepEqual(parseTag("game-studio-v0.1.2"), { name: "game-studio", version: "0.1.2" });
     for (const tag of ["1.2.0", "v1.2", "release-1", "V1.2.0", "Tiles-v1.0.0", "v01.0.0"]) assert.equal(parseTag(tag), undefined, tag);
+  });
+});
+
+describe("githubApi", () => {
+  it("fails rather than list only what a timed-out search found", async () => {
+    const api = githubApi(async () => Response.json({ incomplete_results: true, items: [] }), "");
+    await assert.rejects(api.repositories("ohmygame-plugin"), /timed out/);
   });
 });
 
