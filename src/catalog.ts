@@ -107,6 +107,24 @@ export function applyClaims(versions: IndexedVersion[], firstReleased: ReadonlyM
   });
 }
 
+/**
+ * The app knows a release by its id and version, so only one release may hold
+ * each: the one published first. Run this after applyClaims.
+ */
+export function applyVersionClaims(versions: IndexedVersion[]): IndexedVersion[] {
+  const first = new Map<string, IndexedVersion>();
+  for (const version of versions) {
+    if (!version.plugin) continue;
+    const key = `${version.plugin.id}@${version.version}`;
+    const held = first.get(key);
+    if (!held || (version.publishedAt ?? "\uffff") < (held.publishedAt ?? "\uffff")) first.set(key, version);
+  }
+  return versions.map((version) => {
+    const held = version.plugin && first.get(`${version.plugin.id}@${version.version}`);
+    return held && held !== version ? reject(version, `${version.plugin!.id} ${version.version} is already released as ${held.repository} ${held.tag}`) : version;
+  });
+}
+
 /** The featured plugins someone can install, in the file's order. */
 export function featuredPlugins(featured: string[], versions: IndexedVersion[]): string[] {
   const available = new Set(versions.flatMap((version) => (version.plugin ? [version.plugin.id] : [])));

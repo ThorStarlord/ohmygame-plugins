@@ -13,6 +13,13 @@ export interface FoundRepository {
   createdAt?: string;
 }
 
+/** GitHub answered with an error. */
+export class GitHubError extends Error {
+  constructor(readonly status: number, url: string) {
+    super(`${url}: HTTP ${status}`);
+  }
+}
+
 /** One release, as GitHub lists it. */
 export interface FoundRelease {
   id: number;
@@ -25,6 +32,7 @@ export interface FoundRelease {
 /** What the index reads from GitHub. Each throws when GitHub can't answer. */
 export interface GitHubApi {
   repositories(topic: string): Promise<FoundRepository[]>;
+  /** Its newest releases, at most 100. */
   releases(owner: string, repo: string): Promise<FoundRelease[]>;
   /** The commit a tag points to. */
   commit(owner: string, repo: string, tag: string): Promise<string>;
@@ -84,13 +92,14 @@ type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 export function githubApi(fetch: Fetch, token = process.env.GITHUB_TOKEN): GitHubApi {
   const get = async (url: string): Promise<any> => {
     const response = await fetch(url, {
+      signal: AbortSignal.timeout(30_000),
       headers: {
         accept: "application/vnd.github+json",
         "x-github-api-version": "2022-11-28",
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
     });
-    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+    if (!response.ok) throw new GitHubError(response.status, url);
     return response.json();
   };
   const name = (value: unknown) => {
@@ -121,24 +130,20 @@ export function githubApi(fetch: Fetch, token = process.env.GITHUB_TOKEN): GitHu
       return found;
     },
     async releases(owner, repo) {
-      const releases: FoundRelease[] = [];
-      for (let page = 1; ; page++) {
-        const items: any[] = await get(`${API}/repos/${owner}/${repo}/releases?per_page=100&page=${page}`);
-        for (const item of items)
-          releases.push({
-            id: Number(item.id),
-            tag: String(item.tag_name ?? ""),
-            draft: item.draft === true,
-            ...(typeof item.published_at === "string" ? { publishedAt: item.published_at } : {}),
-            assets: (Array.isArray(item.assets) ? item.assets : []).map((asset: any) => ({
-              id: Number(asset.id),
-              name: String(asset.name ?? ""),
-              size: Number(asset.size),
-              url: String(asset.browser_download_url ?? ""),
-            })),
-          });
-        if (items.length < 100) return releases;
-      }
+      // Only the newest page, so one repository can't spend the run's API budget.
+      const items: any[] = await get(`${API}/repos/${owner}/${repo}/releases?per_page=100`);
+      return items.map((item): FoundRelease => ({
+        id: Number(item.id),
+        tag: String(item.tag_name ?? ""),
+        draft: item.draft === true,
+        ...(typeof item.published_at === "string" ? { publishedAt: item.published_at } : {}),
+        assets: (Array.isArray(item.assets) ? item.assets : []).map((asset: any) => ({
+          id: Number(asset.id),
+          name: String(asset.name ?? ""),
+          size: Number(asset.size),
+          url: String(asset.browser_download_url ?? ""),
+        })),
+      }));
     },
     async commit(owner, repo, tag) {
       const data = await get(`${API}/repos/${owner}/${repo}/commits/${encodeURIComponent(tag)}`);

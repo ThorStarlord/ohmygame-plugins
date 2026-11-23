@@ -21,6 +21,7 @@ import {
   applyBlocks,
   applyCategories,
   applyClaims,
+  applyVersionClaims,
   featuredPlugins,
   parseBlocked,
   parseCategories,
@@ -28,7 +29,7 @@ import {
   type RepositoryFacts,
 } from "./catalog.ts";
 import { judgeArchive, type AppChecks, type IndexedVersion, type SaveImage, type Verdict } from "./checks.ts";
-import { parseTag, releaseArchive, type GitHubApi, type FoundRepository } from "./github.ts";
+import { GitHubError, parseTag, releaseArchive, type GitHubApi, type FoundRepository } from "./github.ts";
 import { mirrorPath, signRelease, type SigningKey } from "./signing.ts";
 
 export interface BuildOptions {
@@ -100,16 +101,32 @@ export async function buildIndex(options: BuildOptions): Promise<{ index: unknow
   const firstReleased = new Map<string, string>();
   let versions: IndexedVersion[] = [];
   const kept = new Set<string>();
+  /** The repositories this run read, by `owner/repo` lowercased: only their cache entries can be let go. */
+  const seen = new Set<string>();
 
   for (const repository of repositories) {
     const full = `${repository.owner}/${repository.repo}`;
+    // Search pages can shift while they are read, and give one repository twice.
+    if (seen.has(full.toLowerCase())) continue;
     facts[full] = { stars: repository.stars, ...(repository.avatar ? { avatar: repository.avatar } : {}), ...(repository.createdAt ? { createdAt: repository.createdAt } : {}) };
-    // One that can't be read fails the run: leaving it out would drop its plugins from the catalog.
-    for (const release of await github.releases(repository.owner, repository.repo)) {
+    let releases: Awaited<ReturnType<GitHubApi["releases"]>>;
+    try {
+      releases = await github.releases(repository.owner, repository.repo);
+    } catch (error) {
+      // Search still lists a repository deleted or made private for a while; that one
+      // is left out. Anything else fails the run, so no partial index is published.
+      if (!(error instanceof GitHubError && error.status === 404)) throw error;
+      delete facts[full];
+      log(`left out ${full}: GitHub doesn't have it any more`);
+      continue;
+    }
+    seen.add(full.toLowerCase());
+    for (const release of releases) {
       const tag = parseTag(release.tag);
       if (release.draft || !tag) continue;
-      if (release.publishedAt && (firstReleased.get(full) ?? "￿") > release.publishedAt) firstReleased.set(full, release.publishedAt);
-      const key = `${full}@${release.tag}`.toLowerCase();
+      if (release.publishedAt && (firstReleased.get(full) ?? "\uffff") > release.publishedAt) firstReleased.set(full, release.publishedAt);
+      // GitHub ignores case in a repository's name, not in a tag.
+      const key = `${full.toLowerCase()}@${release.tag}`;
       kept.add(key);
       try {
         const cached = await judged(repository, release, tag, cache[key]);
@@ -150,23 +167,40 @@ export async function buildIndex(options: BuildOptions): Promise<{ index: unknow
   async function judged(repository: FoundRepository, release: Parameters<typeof releaseArchive>[1], tag: { version: string; name?: string }, cached: CachedRelease | undefined): Promise<CachedRelease> {
     const asset = release.assets.filter((item) => item.name.toLowerCase().endsWith(".zip"));
     const archiveKey = asset.length === 1 ? `asset:${asset[0]!.id}` : asset.length ? "many" : "source";
-    if (cached && cached.release === release.id && cached.archive === archiveKey && cached.checks === checks && cached.version === tag.version) {
+    const same = cached?.release === release.id && cached.archive === archiveKey && cached.version === tag.version;
+    if (cached && same && cached.checks === checks) {
       const present = await Promise.all([...imagesOf(cached.verdict).map((file) => exists(at(file))), ...(cached.verdict.plugin ? [exists(archiveAt(cached))] : [])]);
       if (present.every(Boolean)) return cached;
     }
-    // Read again whenever the archive is, so a tag moved since is followed.
-    const commit = await github.commit(repository.owner, repository.repo, release.tag);
+    // A release judged before keeps its commit and, once signed, its bytes: the mirror's
+    // copy is judged again, so a moved tag or a changed source can't change a signed version.
+    const stored = same && cached.verdict.plugin ? await readFile(archiveAt(cached)).catch(() => undefined) : undefined;
+    let commit: string;
+    if (same) commit = cached.commit;
+    else {
+      try {
+        commit = await github.commit(repository.owner, repository.repo, release.tag);
+      } catch (error) {
+        // A tag on something that isn't a commit.
+        if (error instanceof GitHubError && (error.status === 404 || error.status === 422))
+          return { release: release.id, version: tag.version, archive: archiveKey, commit: "", checks, verdict: { rejected: [`tag ${release.tag} doesn't point to a commit`] } };
+        throw error;
+      }
+    }
     const base = { release: release.id, version: tag.version, archive: archiveKey, commit, checks };
     const source = releaseArchive(repository, release, commit);
     if ("issue" in source) return { ...base, verdict: { rejected: [source.issue] } };
     if (source.kind === "asset" && source.size > app.archiveMaxBytes)
       return { ...base, verdict: { rejected: [`the archive is larger than ${Math.round(app.archiveMaxBytes / 1024 / 1024)} MB`] } };
     let bytes: Buffer;
-    try {
-      bytes = await options.download(source.url, app.archiveMaxBytes);
-    } catch (error) {
-      if (error instanceof ArchiveTooLarge) return { ...base, verdict: { rejected: [`the archive is larger than ${Math.round(app.archiveMaxBytes / 1024 / 1024)} MB`] } };
-      throw error;
+    if (stored && createHash("sha256").update(stored).digest("hex") === cached!.sha256) bytes = stored;
+    else {
+      try {
+        bytes = await options.download(source.url, app.archiveMaxBytes);
+      } catch (error) {
+        if (error instanceof ArchiveTooLarge) return { ...base, verdict: { rejected: [`the archive is larger than ${Math.round(app.archiveMaxBytes / 1024 / 1024)} MB`] } };
+        throw error;
+      }
     }
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     const verdict = await judgeArchive(app, bytes, { owner: repository.owner, version: tag.version, ...(tag.name ? { name: tag.name } : {}) }, save);
@@ -179,7 +213,7 @@ export async function buildIndex(options: BuildOptions): Promise<{ index: unknow
   }
 
   const lists = options.lists ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-  versions = applyBlocks(applyClaims(versions, firstReleased), parseBlocked(await readFile(path.join(lists, "blocked.json"), "utf8")));
+  versions = applyBlocks(applyVersionClaims(applyClaims(versions, firstReleased)), parseBlocked(await readFile(path.join(lists, "blocked.json"), "utf8")));
   versions = applyCategories(versions, parseCategories(await readFile(path.join(lists, "categories.json"), "utf8"), app.categories));
   // A blocked version keeps no release, so nothing can install it.
   versions = versions.map((version) => {
@@ -198,8 +232,9 @@ export async function buildIndex(options: BuildOptions): Promise<{ index: unknow
   await writeFile(path.join(options.out, `index.${digest}.json`), text);
   await writeFile(path.join(options.out, "index.json"), `${JSON.stringify(pointer)}\n`);
 
-  // Only a release still on GitHub keeps its cache entry, images and archive.
-  if (!only) for (const key of Object.keys(cache)) if (!kept.has(key)) delete cache[key];
+  // Only a release still on GitHub keeps its cache entry, images and archive; one of a
+  // repository this run didn't read is kept for the next.
+  for (const key of Object.keys(cache)) if (seen.has(key.slice(0, key.indexOf("@"))) && !kept.has(key)) delete cache[key];
   const held = Object.values(cache);
   const listed = new Set(versions.flatMap(imagesOf).map((file) => path.basename(file)));
   const heldImages = new Set([...listed, ...held.flatMap(({ verdict }) => imagesOf(verdict)).map((file) => path.basename(file))]);

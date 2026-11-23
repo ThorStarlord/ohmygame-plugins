@@ -207,6 +207,8 @@ export async function judgeArchive(app: AppChecks, bytes: Buffer, expected: Expe
     try {
       root = await unpackArchive(app, archive, staging);
     } catch (error) {
+      // A file system call failing here (no space, too many files) is this runner's, not the archive's.
+      if ((error as NodeJS.ErrnoException).syscall) throw error;
       // Anything else unpacking it throws, such as corrupt compressed data, comes from the archive too.
       return { rejected: [error instanceof ArchiveError ? `the archive ${error.message}` : `the archive can't be unpacked: ${(error as Error).message}`] };
     }

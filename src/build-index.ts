@@ -51,7 +51,8 @@ function options(argv: string[]): Options {
 async function download(url: string, limit: number): Promise<Buffer> {
   let response: Response;
   try {
-    response = await fetchWithRetry(url, { redirect: "follow" });
+    // Five minutes is far longer than the largest archive should take.
+    response = await fetchWithRetry(url, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
   } catch (error) {
     throw new DownloadError((error as Error).message);
   }

@@ -6,7 +6,7 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 import { loadAppChecks, type AppChecks } from "../src/checks.ts";
-import { githubApi, parseTag, type FoundRelease, type FoundRepository, type GitHubApi } from "../src/github.ts";
+import { GitHubError, githubApi, parseTag, type FoundRelease, type FoundRepository, type GitHubApi } from "../src/github.ts";
 import { buildIndex, DownloadError, type CachedRelease } from "../src/index-builder.ts";
 import { signingKey } from "../src/signing.ts";
 import { zip } from "./zip.ts";
@@ -138,6 +138,59 @@ describe("buildIndex", () => {
     await run();
     assert.deepEqual(Object.keys(cache), ["acme/tiles@v1.1.0"]);
     assert.deepEqual(await readdir(path.join(dirs.archives, "packages", "acme", "tiles")), [`1.1.0-${createHash("sha256").update(source).digest("hex")}.zip`]);
+  });
+
+  it("never changes a signed version: a moved tag or new checks judge the mirror's copy again", async () => {
+    const dirs = await folders();
+    const first = await plugin("acme/tiles", "1.0.0", "tiles-a/");
+    const files: Record<string, Buffer | Promise<Buffer>> = {};
+    let commit = "a".repeat(40);
+    const { github, download, downloads } = world([{ repo: repo("acme", "tiles"), releases: [release("v1.0.0")] }], files);
+    github.commit = async () => commit;
+    files[`https://codeload.github.com/acme/tiles/zip/${commit}`] = first;
+    const cache: Record<string, CachedRelease> = {};
+    const run = async () => ((await buildIndex({ app, github, download, key, mirror: MIRROR, topic: "ohmygame-plugin", ...dirs, cache })) as { index: any }).index;
+    const signed = (await run()).versions[0].release;
+    // The tag moves to other code, and the app's checks change.
+    commit = "b".repeat(40);
+    files[`https://codeload.github.com/acme/tiles/zip/${commit}`] = plugin("acme/tiles", "1.0.0", "tiles-b/");
+    for (const entry of Object.values(cache)) entry.checks = "older checks";
+    downloads.length = 0;
+    const again = (await run()).versions[0];
+    assert.deepEqual(downloads, []);
+    assert.deepEqual(again.release, signed);
+    assert.equal(again.commit, "a".repeat(40));
+  });
+
+  it("leaves out a repository GitHub no longer has, a tag on no commit and a second release of one version", async () => {
+    const dirs = await folders();
+    const { github, download } = world([
+      { repo: repo("acme", "tiles"), releases: [release("v1.0.0", ["a.zip"]), release("tiles-v1.0.0", ["b.zip"]), release("v2.0.0")] },
+      { repo: repo("acme", "gone"), releases: [] },
+    ], {
+      "https://github.com/assets/a.zip": plugin("acme/tiles", "1.0.0"),
+      "https://github.com/assets/b.zip": plugin("acme/tiles", "1.0.0", "x/"),
+    });
+    // Search lags: it lists a deleted repository, and one repository twice.
+    const found = await github.repositories("ohmygame-plugin");
+    github.repositories = async () => [...found, found[0]!];
+    const releases = github.releases;
+    github.releases = async (owner, name) => {
+      if (name === "gone") throw new GitHubError(404, "https://api.github.com/repos/acme/gone/releases");
+      return releases(owner, name);
+    };
+    github.commit = async (_owner, _repo, tag) => {
+      if (tag === "v2.0.0") throw new GitHubError(422, "https://api.github.com/repos/acme/tiles/commits/v2.0.0");
+      return "c".repeat(40);
+    };
+    const { index } = await buildIndex({ app, github, download, key, mirror: MIRROR, topic: "ohmygame-plugin", ...dirs, cache: {} }) as { index: any };
+    assert.deepEqual(Object.keys(index.repositories), ["acme/tiles"]);
+    assert.deepEqual(index.versions.map((item: any) => [item.tag, item.rejected ?? "ok"]), [
+      ["v1.0.0", "ok"],
+      // The app knows a release by id and version, so the one published later can't have it.
+      ["tiles-v1.0.0", ["acme/tiles 1.0.0 is already released as acme/tiles v1.0.0"]],
+      ["v2.0.0", ["tag v2.0.0 doesn't point to a commit"]],
+    ]);
   });
 
   it("rejects a release whose tag, owner or assets don't fit its plugin", async () => {
