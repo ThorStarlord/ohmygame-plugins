@@ -1,0 +1,9 @@
+{
+  "displayName": "Pixel Effects",
+  "description": "Browse 244 pixel art effects, tune them and export sprite sheets.",
+  "longDescription": "A Pixel Effects panel with pixelfx's 244 code-drawn pixel art effects: fire, explosions, water, lightning, slashes, hits, pickups, transitions and whole attacks with an actor. Play one frame by frame, then change its backdrop, palette, seed, frame rate, length, size and its own options. Add a transparent sprite sheet or contact sheet to the Library, or save a sprite sheet with Aseprite JSON, a GIF or single frames to pixelfx/exports/ in the project.",
+  "example.1": "Use the sprite sheet in pixelfx/exports/ for the player's hit effect.",
+  "example.2": "Play the explosion sheet from pixelfx/exports/ when an enemy dies.",
+  "keyword.effects": "effects",
+  "panel.title": "Pixel Effects"
+}
