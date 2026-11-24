@@ -1,6 +1,10 @@
 # Preinstalled-plugin migration
 
 This is stage 9 of [OhMyGame #809](https://github.com/WhiteTowerAI/ohmygame/issues/809).
+
+Official plugins are now released on GitHub, not npm (see the [README](../README.md#official-plugins)).
+The npm steps below record how the first migration was done; the app's lock moves to the
+signed GitHub releases in [OhMyGame #1065](https://github.com/WhiteTowerAI/ohmygame/issues/1065) (PR G).
 The first increment packages all 12 existing bundled plugins in this repository.
 The app loader is implemented in [app #823](https://github.com/WhiteTowerAI/ohmygame/pull/823).
 These 12 packages are enabled for first publication; the app cutover follows only
