@@ -3,7 +3,6 @@
 // actor or a whole act when the effect has one. Ported from pixelfx's
 // gallery StageRunner (gallery/app.js, MIT, see lib/LICENSE).
 import {
-  actBounds,
   actorAlphaOf,
   clearFrame,
   composite,
@@ -16,6 +15,7 @@ import {
 } from "./lib/core/index.js";
 import { buildBackdropBuffer, resampleNearestRGBA } from "./export.js";
 import { isScreenFx } from "./options.js";
+import { actFrameStep, actStepper, flippedActBounds, flippedOrigin } from "./timing.js";
 
 export class StageRunner {
   /**
@@ -44,16 +44,31 @@ export class StageRunner {
     this.fx = fx;
     if (!fx) return;
     this.onError(undefined);
+    try {
+      this.#layout();
+    } catch (error) {
+      this.inst = null;
+      this.onError(error);
+      return;
+    }
+    if (resetClock) this.restart();
+    else this.seekFrame(Math.min(this.frameIdx, this.totalFrames - 1));
+  }
+
+  #layout() {
+    const fx = this.fx;
     const m = fx.meta;
     const cfg = this.state.cfg;
     const screen = isScreenFx(m);
+    const flip = !!cfg.flip;
 
     const rect = this.viewport.getBoundingClientRect();
     const viewAspect = rect.width > 40 && rect.height > 40 ? rect.width / rect.height : 16 / 10;
     const aspect = screen ? 16 / 9 : Math.max(1.2, Math.min(2.2, viewAspect));
 
     this.acted = !!fx.mod.act && cfg.actorMode !== "hide";
-    const b = this.acted ? { ...actBounds(fx.mod) } : null;
+    // Flipped, an act faces the other way, so its box is mirrored too.
+    const b = this.acted ? flippedActBounds(fx.mod, flip) : null;
     if (b) b.y1 = Math.min(b.y1, 22);
 
     const [origW, origH] = m.size;
@@ -65,33 +80,37 @@ export class StageRunner {
     this.W = Math.max(220, Math.ceil(Math.max(baseW * pad, baseH * pad * aspect)));
     this.H = Math.max(140, Math.ceil(this.W / aspect));
     if (screen) {
-      this.W = origW;
-      this.H = origH;
+      // A screen effect fills the stage at the size it is shown at.
+      this.W = effW;
+      this.H = effH;
     }
 
-    this.canvas.width = this.W;
-    this.canvas.height = this.H;
-    this.frame = createFrame(this.W, this.H);
-    this.img = this.ctx.createImageData(this.W, this.H);
+    const W = this.W;
+    const H = this.H;
+    const frame = createFrame(W, H);
+    const img = this.ctx.createImageData(W, H);
 
-    const [ox, oy] = this.acted ? [-b.x0, -b.y0] : m.origin;
+    const [ox, oy] = this.acted ? [-b.x0, -b.y0] : flippedOrigin(m, flip);
     if (this.acted) {
-      this.x = Math.floor((this.W - baseW) / 2) + ox;
-      this.y = Math.max(oy + 4, Math.floor(this.H * 0.78));
-    } else if (screen) {
+      this.x = Math.floor((W - baseW) / 2) + ox;
+      this.y = Math.max(oy + 4, Math.floor(H * 0.78));
+    } else if (screen && !this.#scaled()) {
       this.x = ox;
       this.y = oy;
     } else {
       const scaledOX = cfg.scaleWithCanvas ? Math.round((ox * cfg.canvasW) / origW) : ox;
       const scaledOY = cfg.scaleWithCanvas ? Math.round((oy * cfg.canvasH) / origH) : oy;
-      this.x = Math.floor((this.W - effW) / 2) + scaledOX;
-      this.y = Math.floor((this.H - effH) / 2) + scaledOY;
+      this.x = Math.floor((W - effW) / 2) + scaledOX;
+      this.y = Math.floor((H - effH) / 2) + scaledOY;
     }
 
-    this.bgBuf = buildBackdropBuffer(cfg.bg, this.W, this.H, this.y);
+    const bgBuf = buildBackdropBuffer(cfg.bg, W, H, this.y);
+    this.canvas.width = W;
+    this.canvas.height = H;
+    this.frame = frame;
+    this.img = img;
+    this.bgBuf = bgBuf;
     this.totalFrames = Math.max(1, Math.round(cfg.duration * cfg.fps) + (m.loop ? 0 : 1));
-    if (resetClock) this.restart();
-    else this.seekFrame(Math.min(this.frameIdx, this.totalFrames - 1));
   }
 
   #scaled() {
@@ -103,7 +122,9 @@ export class StageRunner {
   #instance() {
     const cfg = this.state.cfg;
     const scaled = this.#scaled();
-    const [x, y] = scaled ? this.fx.meta.origin : [this.x, this.y];
+    // Scaled, the effect is drawn in a frame of its own size first, about its own (flipped) origin.
+    this.fxOrigin = flippedOrigin(this.fx.meta, !!cfg.flip);
+    const [x, y] = scaled ? this.fxOrigin : [this.x, this.y];
     if (scaled) {
       const [origW, origH] = this.fx.meta.size;
       this.fxFrame = createFrame(origW, origH);
@@ -117,19 +138,20 @@ export class StageRunner {
       y,
       flip: !!cfg.flip,
     };
-    this.inst = (this.acted ? createAct : createFx)(this.fx.mod, options);
+    if (this.acted) {
+      this.inst = createAct(this.fx.mod, options);
+      this.step = actStepper(this.inst, this.fx.mod);
+    } else {
+      this.inst = createFx(this.fx.mod, options);
+      this.step = (dt) => this.inst.update(dt);
+    }
   }
 
   simStepDt() {
     const m = this.fx.meta;
     const cfg = this.state.cfg;
-    if (this.acted) {
-      const poses = this.fx.mod.act?.poses ?? [[0]];
-      const from = Math.min(0, poses[0]?.[0] ?? 0);
-      const to = m.loop ? m.duration : Math.max(m.duration, poses[poses.length - 1]?.[0] ?? m.duration);
-      const span = Math.max(0.05, to - from);
-      return this.totalFrames > 1 ? span / (m.loop ? this.totalFrames : this.totalFrames - 1) : 1 / cfg.fps;
-    }
+    // An act plays its whole length, hit-stops included, over the frames.
+    if (this.acted) return this.totalFrames > 1 ? actFrameStep(this.fx.mod, this.totalFrames) : 1 / cfg.fps;
     return (1 / cfg.fps) * (m.duration / Math.max(0.05, cfg.duration));
   }
 
@@ -138,12 +160,12 @@ export class StageRunner {
   }
 
   seekFrame(target) {
-    if (!this.fx) return;
+    if (!this.fx || !this.frame) return;
     target = Math.max(0, Math.min(this.totalFrames - 1, Math.round(target)));
     try {
       this.#instance();
       const dt = this.simStepDt();
-      for (let i = 0; i < target; i++) this.inst.update(dt);
+      for (let i = 0; i < target; i++) this.step(dt);
       this.frameIdx = target;
       this.acc = 0;
       this.wait = 0;
@@ -154,10 +176,13 @@ export class StageRunner {
     }
   }
 
+  /** Plays `dt` seconds of real time, at the panel's speed, a frame at a time. */
   tick(dt) {
     if (!this.fx || !this.inst || !this.state.playing) return;
     const interval = 1 / Math.max(1, this.state.cfg.fps);
-    this.acc = Math.min(this.acc + dt * this.state.speed, 0.25);
+    // A long pause (a hidden page, a slow frame) counts as at most a quarter second, but at least
+    // one frame always builds up, so frame rates under 4 fps still play.
+    this.acc = Math.min(this.acc + Math.min(dt, 0.25) * this.state.speed, Math.max(0.25, interval));
     let advanced = false;
     const dtSim = this.simStepDt();
     try {
@@ -169,14 +194,13 @@ export class StageRunner {
           this.wait += interval;
           if (this.wait >= 0.42) return this.restart();
         } else {
-          this.inst.update(dtSim);
+          this.step(dtSim);
           this.frameIdx++;
           advanced = true;
         }
       }
       if (advanced) this.renderCurrent();
     } catch (error) {
-      this.state.playing = false;
       this.inst = null;
       this.onError(error);
     }
@@ -215,7 +239,7 @@ export class StageRunner {
       // Drawn at the effect's own size, then scaled to the chosen one.
       const [origW, origH] = m.size;
       clearFrame(this.fxFrame);
-      drawInto(this.fxFrame, m.origin[0], m.origin[1]);
+      drawInto(this.fxFrame, this.fxOrigin[0], this.fxOrigin[1]);
       composite(this.fxFrame, this.fxRgba, null);
       const scaled = resampleNearestRGBA(this.fxRgba, origW, origH, cfg.canvasW, cfg.canvasH);
       composite(f, this.img.data, this.bgBuf);
@@ -246,34 +270,6 @@ export class StageRunner {
     composite(f, this.img.data, this.bgBuf);
     this.ctx.putImageData(this.img, 0, 0);
     this.onFrame();
-  }
-}
-
-/**
- * Six colours sampled from what an effect draws a little before its middle,
- * dark to light, for the palette swatches of an effect without a colour
- * ramp; undefined when it draws too few.
- */
-export function sampleColors(fx) {
-  try {
-    const [w, h] = fx.meta.size;
-    const frame = createFrame(w, h);
-    const inst = createFx(fx.mod, { x: fx.meta.origin[0], y: fx.meta.origin[1] });
-    for (let i = 0; i < 5; i++) inst.update((fx.meta.duration * 0.45) / 5);
-    inst.draw(frame);
-    const out = composite(frame, new Uint8ClampedArray(w * h * 4), null);
-    const buckets = new Map();
-    for (let i = 0; i < w * h; i++) {
-      if (out[i * 4 + 3] < 120) continue;
-      const [r, g, b] = [out[i * 4] & 0xf0, out[i * 4 + 1] & 0xf0, out[i * 4 + 2] & 0xf0];
-      const hex = "#" + [r, g, b].map((n) => Math.min(255, n + 8).toString(16).padStart(2, "0")).join("");
-      if (!buckets.has(hex)) buckets.set(hex, 0.299 * r + 0.587 * g + 0.114 * b);
-    }
-    const sorted = [...buckets].sort((a, b) => a[1] - b[1]).map(([hex]) => hex);
-    if (sorted.length < 5) return undefined;
-    return Array.from({ length: 6 }, (_, i) => sorted[Math.round((i * (sorted.length - 1)) / 5)]);
-  } catch {
-    return undefined;
   }
 }
 

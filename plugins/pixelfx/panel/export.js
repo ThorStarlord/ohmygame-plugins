@@ -10,7 +10,6 @@ import {
   clearFrame,
   createFx,
   createAct,
-  actBounds,
   actTiming,
   composite,
   backdrop,
@@ -21,6 +20,7 @@ import {
   rgb,
   rand,
 } from "./lib/core/index.js";
+import { actFrameStep, actStepper, flippedActBounds, flippedOrigin } from "./timing.js";
 
 /**
  * 生成俯视像素石砖地板（对应截图中的「俯视石砖」背景）
@@ -170,19 +170,53 @@ function edgeFadeLight(f, E = 6) {
   }
 }
 
+/** The frames an export makes: their size, rate, length and count. */
+export function exportShape(fx, cfg) {
+  const m = fx.meta;
+  const w = Math.max(16, Math.round(cfg.canvasW || m.size[0]));
+  const h = Math.max(16, Math.round(cfg.canvasH || m.size[1]));
+  const fps = Math.max(1, +(cfg.fps || m.fps));
+  const duration = Math.max(0.05, +(cfg.duration || m.duration));
+  return { w, h, fps, duration, frames: Math.max(1, Math.round(duration * fps) + (m.loop ? 0 : 1)) };
+}
+
+/** At most this many pixels across all of an export's frames, kept in memory at once: 256 MB of RGBA. */
+export const MAX_EXPORT_PIXELS = 64 * 1024 * 1024;
+/** Chromium's canvas limits: a side of at most 32,767 pixels and an area of at most 268,435,456. */
+export const MAX_CANVAS_SIDE = 32767;
+export const MAX_CANVAS_AREA = 268435456;
+
+const canvasFits = (width, height) => width <= MAX_CANVAS_SIDE && height <= MAX_CANVAS_SIDE && width * height <= MAX_CANVAS_AREA;
+
+/**
+ * Whether an export is small enough to render: its frames within
+ * MAX_EXPORT_PIXELS, and its sprite sheet (or contact sheet) within a
+ * canvas. `{ ok, frames, w, h }`.
+ */
+export function exportBudget(fx, cfg, { contact = false } = {}) {
+  const { w, h, frames } = exportShape(fx, cfg);
+  let ok = frames * w * h <= MAX_EXPORT_PIXELS;
+  if (ok) {
+    const { cols, rows } = sheetLayout(frames, w, h);
+    ok = canvasFits(cols * w, rows * h);
+  }
+  if (ok && contact) {
+    const size = contactLayout(frames, w, h);
+    ok = canvasFits(size.width, size.height);
+  }
+  return { ok, frames, w, h };
+}
+
 /**
  * 渲染当前参数下的完整帧序列（用于透明图集预览、导出 PNG+JSON、导出 GIF、单帧序列）
  */
 export function renderExportFrames(fx, cfg, { includeBg = false } = {}) {
   const m = fx.meta;
   const [origW, origH] = m.size;
-  const [origOX, origOY] = m.origin;
+  // Flipped, the effect is mirrored about its origin, so the origin moves to keep it in its box.
+  const [origOX, origOY] = flippedOrigin(m, !!cfg.flip);
 
-  const targetW = Math.max(16, Math.round(cfg.canvasW || origW));
-  const targetH = Math.max(16, Math.round(cfg.canvasH || origH));
-  const fps = Math.max(1, +(cfg.fps || m.fps));
-  const duration = Math.max(0.05, +(cfg.duration || m.duration));
-  const totalFrames = Math.max(1, Math.round(duration * fps) + (m.loop ? 0 : 1));
+  const { w: targetW, h: targetH, fps, duration, frames: totalFrames } = exportShape(fx, cfg);
   const isScreen = origW >= 320 && Math.abs(origW / origH - 16 / 9) < 0.05;
 
   // 若开启「动画随画布缩放」，先按原始像素尺寸渲染，再最近邻重采样至目标画布尺寸；
@@ -197,14 +231,14 @@ export function renderExportFrames(fx, cfg, { includeBg = false } = {}) {
   const wantAct = !!fx.mod.act && actorMode !== "hide";
 
   if (wantAct && useResample) {
-    const b = actBounds(fx.mod);
+    const b = flippedActBounds(fx.mod, !!cfg.flip);
     const pad = 6;
     simW = b.x1 - b.x0 + pad * 2;
     simH = b.y1 - b.y0 + pad * 2;
     ox = pad - b.x0;
     oy = pad - b.y0;
   } else if (wantAct && !useResample) {
-    const b = actBounds(fx.mod);
+    const b = flippedActBounds(fx.mod, !!cfg.flip);
     const pad = 6;
     const bw = b.x1 - b.x0 + pad * 2;
     const bh = b.y1 - b.y0 + pad * 2;
@@ -227,13 +261,12 @@ export function renderExportFrames(fx, cfg, { includeBg = false } = {}) {
   const frames = [];
   if (wantAct) {
     const act = createAct(fx.mod, fxOpts);
-    const spanFrom = act.t;
-    const spanTo = m.loop ? m.duration : Math.max(m.duration, ...(fx.mod.act.poses?.map((k) => k[0]) ?? [m.duration]));
-    const simTotal = Math.max(0.05, spanTo - spanFrom);
-    const dtSim = totalFrames > 1 ? simTotal / (m.loop ? totalFrames : totalFrames - 1) : 0;
+    // The act's whole length, hit-stops included, so its last frame is its last pose.
+    const step = actStepper(act, fx.mod);
+    const dtSim = actFrameStep(fx.mod, totalFrames);
 
     for (let i = 0; i < totalFrames; i++) {
-      if (i > 0) act.update(dtSim);
+      if (i > 0) step(dtSim);
       clearFrame(frame);
       act.draw(frame, {
         body: actorMode === "full" || actorMode === "body",
@@ -302,22 +335,28 @@ export function sheetLayout(n, w, h) {
 export function buildSpriteSheet(fx, cfg, { exportActor = false } = {}) {
   const seqCfg = exportActor ? cfg : { ...cfg, actorMode: "hide" };
   const seq = renderExportFrames(fx, seqCfg, { includeBg: false });
-  const { w, h, fps, loop, totalFrames: n, pivot, frames } = seq;
+  const { w, h, totalFrames: n, frames } = seq;
   const { cols, rows } = sheetLayout(n, w, h);
 
   const cv = document.createElement("canvas");
   cv.width = cols * w;
   cv.height = rows * h;
   const ctx = cv.getContext("2d");
+  for (let i = 0; i < n; i++) {
+    ctx.putImageData(new ImageData(frames[i].rgba, w, h), (i % cols) * w, Math.floor(i / cols) * h);
+  }
+  const json = sheetJson(fx, cfg, seq, cols, rows);
+  return { canvas: cv, json, cols, rows, w, h, n, fps: seq.fps, loop: seq.loop, shortName: fx.id.split("/")[1], seq };
+}
 
+/** The Aseprite-style JSON of a sprite sheet of `seq`'s frames in `cols` × `rows`. */
+export function sheetJson(fx, cfg, seq, cols, rows) {
+  const { w, h, fps, loop, totalFrames: n, pivot } = seq;
   const shortName = fx.id.split("/")[1];
   const frameEntries = [];
-
   for (let i = 0; i < n; i++) {
     const x = (i % cols) * w;
     const y = Math.floor(i / cols) * h;
-    const imgData = new ImageData(frames[i].rgba, w, h);
-    ctx.putImageData(imgData, x, y);
     frameEntries.push({
       filename: `${shortName} ${i}`,
       frame: { x, y, w, h },
@@ -328,8 +367,7 @@ export function buildSpriteSheet(fx, cfg, { exportActor = false } = {}) {
       duration: Math.max(1, Math.round(1000 / fps)),
     });
   }
-
-  const json = {
+  return {
     frames: frameEntries,
     meta: {
       app: "https://github.com/patch-gg/pixelfx",
@@ -356,8 +394,24 @@ export function buildSpriteSheet(fx, cfg, { exportActor = false } = {}) {
       },
     },
   };
+}
 
-  return { canvas: cv, json, cols, rows, w, h, n, fps, loop, shortName, seq };
+/** The meta for frames saved one file each: the sheet's, without what only a sheet has, and the files in order. */
+export function framesMeta(sheetMeta, files) {
+  const { image: _image, size: _size, pixelfx, ...rest } = sheetMeta;
+  const { columns: _columns, rows: _rows, ...frames } = pixelfx;
+  return { ...rest, pixelfx: frames, files };
+}
+
+/** How a contact sheet of `n` frames of `w`×`h` is laid out, and its size. */
+export function contactLayout(n, w, h) {
+  const scale = Math.max(1, Math.min(4, Math.floor(260 / Math.max(w, h))));
+  const cols = Math.min(n, Math.max(1, Math.min(6, Math.ceil(Math.sqrt(n)))));
+  const rows = Math.ceil(n / cols);
+  const pad = 12;
+  const labelH = 20;
+  const headH = 40;
+  return { scale, cols, rows, pad, labelH, headH, width: pad + cols * (w * scale + pad), height: headH + rows * (h * scale + labelH + pad) + pad };
 }
 
 /**
@@ -366,18 +420,13 @@ export function buildSpriteSheet(fx, cfg, { exportActor = false } = {}) {
 export function buildContactSheetCanvas(fx, cfg) {
   const seq = renderExportFrames(fx, cfg, { includeBg: true });
   const { w, h, frames, fps, totalFrames: n } = seq;
-  const scale = Math.max(1, Math.min(4, Math.floor(260 / Math.max(w, h))));
+  const { scale, cols, pad, labelH, headH, width, height } = contactLayout(n, w, h);
   const cw = w * scale;
   const ch = h * scale;
-  const cols = Math.min(n, Math.max(1, Math.min(6, Math.ceil(Math.sqrt(n)))));
-  const rows = Math.ceil(n / cols);
-  const pad = 12;
-  const labelH = 20;
-  const headH = 40;
 
   const cv = document.createElement("canvas");
-  cv.width = pad + cols * (cw + pad);
-  cv.height = headH + rows * (ch + labelH + pad) + pad;
+  cv.width = width;
+  cv.height = height;
   const ctx = cv.getContext("2d");
   ctx.fillStyle = "#111019";
   ctx.fillRect(0, 0, cv.width, cv.height);
@@ -558,16 +607,26 @@ function lzwEncode(indexed, minCodeSize = 8) {
   return new Uint8Array(out);
 }
 
+/** The fastest frame rate a GIF shows: its delays are in hundredths of a second, and browsers slow anything under 2. */
+export const GIF_MAX_FPS = 50;
+
+/** Each of `n` frames' delay at `fps`, in hundredths of a second, rounded so they add up to the right length. */
+export function gifDelays(n, fps) {
+  const at = (i) => Math.round((i * 100) / fps);
+  return Array.from({ length: n }, (_, i) => Math.max(2, at(i + 1) - at(i)));
+}
+
 /**
  * 将帧序列编码为 GIF89a Blob（支持整数倍像素放大，默认 2× 让导出的 GIF 更清晰）
  */
 export function buildGifBlob(fx, cfg) {
   const transparent = cfg.bg === "checker" || cfg.bg === "none";
-  const seq = renderExportFrames(fx, cfg, { includeBg: !transparent });
+  // A GIF frame lasts at least 2 hundredths of a second, so faster effects are drawn at 50 fps.
+  const seq = renderExportFrames(fx, { ...cfg, fps: Math.min(GIF_MAX_FPS, +(cfg.fps || fx.meta.fps)) }, { includeBg: !transparent });
   const scale = Math.max(1, Math.min(3, Math.floor(320 / Math.max(seq.w, seq.h))));
   const W = seq.w * scale;
   const H = seq.h * scale;
-  const delayCs = Math.max(2, Math.round(100 / seq.fps));
+  const delays = gifDelays(seq.frames.length, seq.fps);
 
   const chunks = [];
   const pushBytes = (...arr) => chunks.push(new Uint8Array(arr));
@@ -585,7 +644,8 @@ export function buildGifBlob(fx, cfg) {
     0x03, 0x01, ...u16(loopCount), 0x00,
   );
 
-  for (const f of seq.frames) {
+  for (const [index, f] of seq.frames.entries()) {
+    const delayCs = delays[index];
     const rgba = scale > 1 ? resampleNearestRGBA(f.rgba, seq.w, seq.h, W, H) : f.rgba;
     const { flatPal, indexed, transIdx } = quantizeFrame(rgba, W * H, transparent);
 

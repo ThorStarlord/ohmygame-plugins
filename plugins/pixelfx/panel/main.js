@@ -7,9 +7,19 @@ import { connect } from "/_ohmygame/plugin-ui.js";
 import { effects, categories } from "./lib/fx/index.js";
 import { actTiming, PAL } from "./lib/core/index.js";
 import { ZH_BACKDROPS, ZH_CATEGORIES, ZH_FX, ZH_OPTION_KEYS, ZH_PALETTES } from "./lib/zh-data.js";
-import { buildContactSheetCanvas, buildGifBlob, buildSpriteSheet, canvasToPngBlob } from "./export.js";
+import {
+  buildContactSheetCanvas,
+  buildGifBlob,
+  buildSpriteSheet,
+  canvasToPngBlob,
+  exportBudget,
+  framesMeta,
+  renderExportFrames,
+  sheetJson,
+  sheetLayout,
+} from "./export.js";
 import { defaultConfig, effectOptions, fullMeta, isColorRamp, normHex } from "./options.js";
-import { drawThumbnail, sampleColors, StageRunner } from "./stage.js";
+import { drawThumbnail, StageRunner } from "./stage.js";
 import { TEXT } from "./i18n.js";
 
 const host = await connect();
@@ -211,7 +221,7 @@ function buildPage() {
           labelFor("sel-bg", t.backdrop),
           el("select", { id: "sel-bg", className: "ctrl-select row-fill" }, Object.keys(ZH_BACKDROPS).map((key) => option(key, backdropName(key)))),
         ]),
-        el("div", { className: "form-row" }, [
+        el("div", { className: "form-row", id: "row-pal" }, [
           labelFor("sel-pal", t.palette),
           el("select", { id: "sel-pal", className: "ctrl-select row-fill" }, [
             option("", t.paletteOriginal),
@@ -285,6 +295,7 @@ const stage = new StageRunner($("#stage-canvas"), $("#stage-viewport"), state, {
     const overlay = $("#stage-error");
     overlay.hidden = !error;
     overlay.textContent = error ? t.stageError(errorText(error)) : "";
+    if (error) setPlaying(false);
   },
 });
 
@@ -298,6 +309,7 @@ function selectEffect(fx) {
   void host.request("storage.set", { key: "effect", value: fx.id }).catch(() => {});
   syncInspector();
   buildExtraOptions();
+  setPlaying(true);
   stage.setup(fx, true);
   highlightCarousel();
   if (state.view === "sheet") refreshSheet();
@@ -348,16 +360,14 @@ function updateDurationScale() {
   $("#dur-scale").textContent = `${ratio.toFixed(2)}×`;
 }
 
-/** The colours the swatches show before any are chosen: the effect's own ramp, or a sample of what it draws. */
-function defaultRamp(fx) {
-  const options = fx.meta.options;
-  if (isColorRamp(options.palette)) return options.palette.map(normHex);
-  for (const value of Object.values(options)) if (isColorRamp(value)) return value.map(normHex);
-  return sampleColors(fx) ?? PAL.water.map(normHex);
-}
-
 function renderSwatches() {
-  const colors = (state.cfg.palette ?? defaultRamp(state.fx)).map(normHex);
+  // Only an effect whose options have a colour ramp as `palette` takes one; the others ignore it.
+  const own = state.fx.meta.options.palette;
+  const takesPalette = isColorRamp(own);
+  $("#row-pal").hidden = !takesPalette;
+  $("#swatch-bar").hidden = !takesPalette;
+  if (!takesPalette) return $("#swatch-bar").replaceChildren();
+  const colors = (state.cfg.palette ?? own).map(normHex);
   $("#swatch-bar").replaceChildren(
     ...colors.map((color, index) => {
       const picker = el("input", { type: "color", value: color, ariaLabel: t.swatch(index + 1) });
@@ -464,10 +474,15 @@ function buildExtraOptions() {
   $("#extra-body").replaceChildren(...rows);
 }
 
+let viewTimer;
 function applyChange(resetClock = false) {
   stage.setup(state.fx, resetClock);
-  if (state.view === "sheet") refreshSheet();
-  if (state.view === "code" && state.codeMode !== "source") void refreshCode();
+  // The sheet and its JSON draw every frame, so they wait for a pause in the changes, such as a dragged slider.
+  clearTimeout(viewTimer);
+  viewTimer = setTimeout(() => {
+    if (state.view === "sheet") refreshSheet();
+    if (state.view === "code" && state.codeMode !== "source") void refreshCode();
+  }, 250);
 }
 
 function updateTimeline() {
@@ -491,7 +506,22 @@ function exportConfig() {
   return { ...state.cfg, displayName: nameOf(state.fx) };
 }
 
+/** Why an export of the current settings is too big to render, or undefined when it isn't. */
+function tooBig(options) {
+  const budget = exportBudget(state.fx, state.cfg, options);
+  return budget.ok ? undefined : t.tooBig(budget.frames, budget.w, budget.h);
+}
+
 function refreshSheet() {
+  const big = tooBig();
+  if (big) {
+    state.sheet = undefined;
+    $("#sheet-summary").textContent = big;
+    const canvas = $("#sheet-canvas");
+    canvas.width = canvas.height = 0;
+    canvas.style.width = canvas.style.height = "0";
+    return;
+  }
   let sheet;
   try {
     sheet = buildSpriteSheet(state.fx, exportConfig(), { exportActor: state.sheetActor });
@@ -581,6 +611,11 @@ async function refreshCode() {
   }
   if (state.codeMode === "json") {
     $("#code-path").textContent = `${fx.id.split("/")[1]}.json`;
+    const big = tooBig();
+    if (big) {
+      content.textContent = `// ${big}`;
+      return;
+    }
     try {
       content.textContent = JSON.stringify(buildSpriteSheet(fx, exportConfig(), { exportActor: state.sheetActor }).json, null, 2);
     } catch (error) {
@@ -721,8 +756,35 @@ async function addToLibrary(blob, name) {
   }
 }
 
+/** Saves one PNG per frame, then deletes the frames a longer export left in the same folder. */
+async function exportFrames(fx, cfg, name, write) {
+  const seq = renderExportFrames(fx, state.sheetActor ? cfg : { ...cfg, actorMode: "hide" });
+  const n = seq.totalFrames;
+  const digits = Math.max(3, String(n - 1).length);
+  const folder = `${EXPORT_DIR}/${name}-frames`;
+  const canvas = el("canvas", { width: seq.w, height: seq.h });
+  const ctx = canvas.getContext("2d");
+  const files = [];
+  for (let i = 0; i < n; i++) {
+    ctx.clearRect(0, 0, seq.w, seq.h);
+    ctx.putImageData(new ImageData(seq.frames[i].rgba, seq.w, seq.h), 0, 0);
+    const file = `${name}_${String(i).padStart(digits, "0")}.png`;
+    await write(`${folder}/${file}`, await canvasToPngBlob(canvas));
+    files.push(file);
+  }
+  const { cols, rows } = sheetLayout(n, seq.w, seq.h);
+  await write(`${folder}/${name}_meta.json`, `${JSON.stringify(framesMeta(sheetJson(fx, cfg, seq, cols, rows).meta, files), null, 2)}\n`);
+  const kept = new Set(files.map((file) => `${folder}/${file}`));
+  const prefix = `${folder}/${name}_`;
+  const leftover = (path) => path.startsWith(prefix) && /^\d+\.png$/.test(path.slice(prefix.length)) && !kept.has(path);
+  const { entries } = await host.files.list(folder);
+  for (const entry of entries) if (entry.kind === "file" && leftover(entry.path)) await host.files.delete(entry.path);
+}
+
 async function exportAs(format) {
   if (state.exporting || !state.fx) return;
+  const big = tooBig({ contact: format === "contact" });
+  if (big) return toast(big, "danger");
   const fx = state.fx;
   const cfg = exportConfig();
   const name = fx.id.split("/")[1];
@@ -730,9 +792,9 @@ async function exportAs(format) {
   updateExportButton();
   // Lets the button show it is working before the frames are drawn.
   await new Promise((resolve) => setTimeout(resolve, 20));
+  const saved = [];
+  const write = async (path, contents) => saved.push(await host.files.write(path, contents));
   try {
-    const saved = [];
-    const write = async (path, contents) => saved.push(await host.files.write(path, contents));
     if (format === "sheet-both" || format === "sheet-png") {
       const sheet = buildSpriteSheet(fx, cfg, { exportActor: state.sheetActor });
       const png = await canvasToPngBlob(sheet.canvas);
@@ -746,21 +808,12 @@ async function exportAs(format) {
     } else if (format === "gif") {
       await write(`${EXPORT_DIR}/${name}.gif`, buildGifBlob(fx, cfg));
     } else if (format === "frames") {
-      const sheet = buildSpriteSheet(fx, cfg, { exportActor: state.sheetActor });
-      const canvas = el("canvas", { width: sheet.w, height: sheet.h });
-      const ctx = canvas.getContext("2d");
-      const folder = `${EXPORT_DIR}/${name}-frames`;
-      for (let i = 0; i < sheet.n; i++) {
-        ctx.clearRect(0, 0, sheet.w, sheet.h);
-        ctx.putImageData(new ImageData(sheet.seq.frames[i].rgba, sheet.w, sheet.h), 0, 0);
-        await write(`${folder}/${name}_${String(i).padStart(3, "0")}.png`, await canvasToPngBlob(canvas));
-      }
-      await write(`${folder}/${name}_meta.json`, `${JSON.stringify(sheet.json.meta, null, 2)}\n`);
+      await exportFrames(fx, cfg, name, write);
     }
     // The app announces what reaches the Library itself.
     if (saved.length) toast(t.savedFiles(saved), "success");
   } catch (error) {
-    toast(t.exportFailed(errorText(error)), "danger");
+    toast(saved.length ? t.exportFailedAfter(errorText(error), saved) : t.exportFailed(errorText(error)), "danger");
   } finally {
     state.exporting = false;
     updateExportButton();
@@ -834,7 +887,8 @@ $("#scrub-range").addEventListener("input", (event) => {
 });
 
 $("#inp-seed").addEventListener("change", (event) => {
-  state.cfg.seed = Math.round(Number(event.target.value) || 1);
+  const seed = Math.round(Number(event.target.value));
+  state.cfg.seed = Number.isFinite(seed) ? seed : 1;
   event.target.value = state.cfg.seed;
   applyChange(true);
 });
@@ -982,7 +1036,8 @@ rebuildCategories();
 applyFilter();
 showView("live");
 updateExportButton();
-if (!openState(host.opened)) selectEffect(LIBRARY.find((fx) => fx.id === lastEffect) ?? LIBRARY.find((fx) => fx.id === "water/geyser") ?? LIBRARY[0]);
+// An `open` heard while the panel was starting has already chosen the effect.
+if (!openState(host.opened) && !state.fx) selectEffect(LIBRARY.find((fx) => fx.id === lastEffect) ?? LIBRARY.find((fx) => fx.id === "water/geyser") ?? LIBRARY[0]);
 
 let lastTick = performance.now();
 function loop(now) {

@@ -3,7 +3,11 @@ import { describe, it } from "node:test";
 // @ts-expect-error The panel is plain JavaScript.
 import { effects } from "../plugins/pixelfx/panel/lib/fx/index.js";
 // @ts-expect-error The panel is plain JavaScript.
-import { buildGifBlob, renderExportFrames, sheetLayout } from "../plugins/pixelfx/panel/export.js";
+import { buildGifBlob, exportBudget, framesMeta, gifDelays, renderExportFrames, sheetLayout } from "../plugins/pixelfx/panel/export.js";
+// @ts-expect-error The panel is plain JavaScript.
+import { actFrameStep, actLength, actStepper, flippedActBounds, flippedOrigin } from "../plugins/pixelfx/panel/timing.js";
+// @ts-expect-error The panel is plain JavaScript.
+import { actBounds, createAct } from "../plugins/pixelfx/panel/lib/core/index.js";
 // @ts-expect-error The panel is plain JavaScript.
 import { defaultConfig, effectOptions, fullMeta, isScreenFx, optionControl } from "../plugins/pixelfx/panel/options.js";
 // @ts-expect-error The panel is plain JavaScript.
@@ -96,6 +100,83 @@ describe("pixelfx export", () => {
   });
 });
 
+describe("pixelfx limits and timing", () => {
+  it("refuses exports too big to hold or draw", () => {
+    const fx = byId("fire/campfire");
+    assert.equal(exportBudget(fx, defaultConfig(fx)).ok, true);
+    const huge = { ...defaultConfig(fx), canvasW: 1024, canvasH: 1024, fps: 120, duration: 60 };
+    assert.deepEqual(exportBudget(fx, huge), { ok: false, frames: 7200, w: 1024, h: 1024 });
+    // Small frames fit in memory and in a sheet, but a contact sheet of 7,200 of them is taller than a canvas can be.
+    const many = { ...defaultConfig(fx), canvasW: 16, canvasH: 16, fps: 120, duration: 60 };
+    assert.equal(exportBudget(fx, many).ok, true);
+    assert.equal(exportBudget(fx, many, { contact: true }).ok, false);
+  });
+
+  it("gives GIF frames delays that add up to the length", () => {
+    for (const [n, fps] of [[31, 30], [13, 12], [25, 24], [50, 50], [7, 7.5]]) {
+      const delays = gifDelays(n, fps);
+      assert.equal(delays.length, n);
+      assert.equal(delays.reduce((a: number, b: number) => a + b, 0), Math.round((n * 100) / fps), `${n} at ${fps}`);
+      assert.ok(delays.every((d: number) => d >= 2));
+    }
+  });
+
+  it("draws GIFs faster than 50 fps at 50 fps", async () => {
+    const fx = byId("fire/campfire");
+    const bytes = new Uint8Array(await buildGifBlob(fx, { ...defaultConfig(fx), fps: 100, duration: 0.5 }).arrayBuffer());
+    // Each frame starts with a graphic control extension, 21 F9 04.
+    let frames = 0;
+    for (let i = 0; i + 2 < bytes.length; i++) if (bytes[i] === 0x21 && bytes[i + 1] === 0xf9 && bytes[i + 2] === 0x04) frames++;
+    assert.equal(frames, 25);
+  });
+
+  it("plays an act to its last pose, hit-stops included", () => {
+    const fx = byId("moves/sword-combo");
+    const { end, seconds, from } = actLength(fx.mod);
+    assert.ok(seconds > end - from, "sword combo has hit-stops");
+    for (const frames of [12, 31, 90]) {
+      const act = createAct(fx.mod, { x: 100, y: 100 });
+      const step = actStepper(act, fx.mod);
+      const dt = actFrameStep(fx.mod, frames);
+      for (let i = 1; i < frames; i++) step(dt);
+      assert.ok(Math.abs(act.t - end) < 1e-6, `${frames} frames end at ${act.t}, not ${end}`);
+    }
+  });
+
+  it("mirrors a flipped act's box and an effect's origin", () => {
+    const fx = byId("moves/sword-combo");
+    const b = actBounds(fx.mod);
+    assert.deepEqual(flippedActBounds(fx.mod, true), { ...b, x0: -b.x1, x1: -b.x0 });
+    assert.deepEqual(flippedOrigin({ size: [128, 96], origin: [40, 80] }, true), [88, 80]);
+    assert.deepEqual(flippedOrigin({ size: [128, 96], origin: [40, 80] }, false), [40, 80]);
+  });
+
+  it("keeps a flipped export as whole as the unflipped one", () => {
+    const opaque = (seq: { frames: { rgba: Uint8ClampedArray }[] }) => {
+      let n = 0;
+      for (const frame of seq.frames) for (let i = 3; i < frame.rgba.length; i += 4) if (frame.rgba[i]) n++;
+      return n;
+    };
+    for (const id of ["moves/sword-combo", "moves/arrow-shot", "fire/fire-breath"]) {
+      const fx = byId(id);
+      const cfg = { ...defaultConfig(fx), fps: 6 };
+      const plain = opaque(renderExportFrames(fx, cfg));
+      const flipped = opaque(renderExportFrames(fx, { ...cfg, flip: true }));
+      assert.ok(Math.abs(flipped - plain) / plain < 0.03, `${id}: ${flipped} pixels flipped, ${plain} not`);
+    }
+  });
+
+  it("describes frames saved one by one without the sheet's layout", () => {
+    const meta = { app: "x", image: "a.png", size: { w: 1, h: 1 }, frameTags: [], pixelfx: { id: "a/b", fps: 12, columns: 4, rows: 3, frames: 2 } };
+    assert.deepEqual(framesMeta(meta, ["b_000.png", "b_001.png"]), {
+      app: "x",
+      frameTags: [],
+      pixelfx: { id: "a/b", fps: 12, frames: 2 },
+      files: ["b_000.png", "b_001.png"],
+    });
+  });
+});
+
 describe("pixelfx stage", () => {
   /** A canvas that keeps the last image put on it. */
   const fakeCanvas = () => {
@@ -114,6 +195,28 @@ describe("pixelfx stage", () => {
     return canvas;
   };
   const viewport = { getBoundingClientRect: () => ({ width: 800, height: 450 }) };
+
+  it("keeps playing below 4 fps", () => {
+    const fx = byId("fire/campfire");
+    const state = { cfg: { ...defaultConfig(fx), fps: 2 }, playing: true, speed: 1 };
+    const stage = new StageRunner(fakeCanvas(), viewport, state, { onFrame() {}, onError() {} });
+    stage.setup(fx);
+    for (let i = 0; i < 12; i++) stage.tick(0.1);
+    assert.equal(stage.frameIdx, 2);
+  });
+
+  it("ends an act on its last pose and reports a broken setup", () => {
+    const fx = byId("moves/sword-combo");
+    const state = { cfg: defaultConfig(fx), playing: true, speed: 1 };
+    const errors: unknown[] = [];
+    const stage = new StageRunner(fakeCanvas(), viewport, state, { onFrame() {}, onError: (error: unknown) => error && errors.push(error) });
+    stage.setup(fx);
+    stage.seekFrame(stage.totalFrames - 1);
+    assert.ok(Math.abs(stage.inst.t - actLength(fx.mod).end) < 1e-6);
+    const broken = { ...fx, mod: { ...fx.mod, act: { poses: "not poses" } } };
+    stage.setup(broken);
+    assert.equal(errors.length, 1);
+  });
 
   it("plays every built-in effect, and some scaled or flipped", () => {
     for (const [index, fx] of LIBRARY.entries()) {

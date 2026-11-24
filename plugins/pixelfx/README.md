@@ -35,5 +35,8 @@ Library source and a Canvas node.
 ## Limits
 
 - The built-in effects are read-only.
+- An export holds all its frames at once, so it stops at 64 million pixels
+  across them (for example 1024×1024 at 30 fps for 2 seconds), and its sprite
+  sheet or contact sheet must fit in a canvas. GIFs play at 50 fps at most.
 - Settings aren't kept when you change effects or close the panel; the
   colour theme and the last effect are.

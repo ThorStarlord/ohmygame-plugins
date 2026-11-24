@@ -1060,6 +1060,11 @@ html {
   scrollbar-gutter: auto;
 }
 
+/* Rows such as the palette hide for effects without one, whatever their display. */
+[hidden] {
+  display: none !important;
+}
+
 .ctrl-btn:disabled,
 .ctrl-select:disabled,
 .dot-btn:disabled {
