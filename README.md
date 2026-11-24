@@ -119,7 +119,9 @@ packing an official plugin follows, leave out `.gitignore` files.
 
 ## What the index job checks
 
-Every 30 minutes, `.github/workflows/index.yml`:
+Every 30 minutes, started by the [index trigger](workers/index-trigger/README.md)
+(GitHub runs the workflow's own schedule only every several hours),
+`.github/workflows/index.yml`:
 
 1. finds public repositories with the topic (GitHub's search gives at most
    1,000), and their releases; GitHub not answering, or a search that timed
