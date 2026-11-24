@@ -2,7 +2,7 @@
 
 An optional Beta plugin that keeps a web game's tests in the project and runs
 them in real game windows, multiplayer included. It needs OhMyGame plugin API
-**2.35**: a desktop build from OhMyGame's `dev` branch until a release has it.
+**2.37**: a desktop build from OhMyGame's `dev` branch until a release has it.
 
 ## What it does
 

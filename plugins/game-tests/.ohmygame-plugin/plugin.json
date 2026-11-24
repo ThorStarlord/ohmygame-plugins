@@ -3,7 +3,7 @@
   "id": "ohmygame/game-tests",
   "version": "0.1.0",
   "engines": {
-    "ohmygame-api": "^2.35.0"
+    "ohmygame-api": "^2.37.0"
   },
   "displayName": "%displayName%",
   "description": "%description%",
