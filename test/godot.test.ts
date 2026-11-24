@@ -153,3 +153,62 @@ it("runs the editor in a managed native session when the host has one", async ()
     assert.equal(stopped, false);
   } finally { await rm(folder, { recursive: true, force: true }); }
 });
+
+it("stops a managed session cancelled while it starts", async () => {
+  // @ts-expect-error The plugin's native code is plain JavaScript.
+  const { activate } = await import("../plugins/godot/native/index.mjs");
+  const folder = await mkdtemp(path.join(tmpdir(), "godot-editor-cancel-"));
+  try {
+    const executable = path.join(folder, process.platform === "win32" ? "godot.exe" : "godot");
+    await writeFile(executable, "");
+    await chmod(executable, 0o755);
+    const controller = new AbortController();
+    const commands = new Map<string, (input: unknown, call: unknown) => Promise<unknown>>();
+    let stopped = false;
+    await activate({
+      project: { folder },
+      registerProjectType() {},
+      registerTool() {},
+      registerCommand(name: string, handler: (input: unknown, call: unknown) => Promise<unknown>) {
+        commands.set(name, handler);
+      },
+      onDispose() {},
+      nativeSessions: {
+        async start() {
+          controller.abort();
+          return { id: "session", pid: 1234, label: "Godot", stop: async () => { stopped = true; }, exited: Promise.resolve({ code: 0, signal: null }) };
+        },
+      },
+    });
+    await assert.rejects(
+      commands.get("runInGodot")!({}, { configuration: { godotPath: executable }, signal: controller.signal }),
+      /Stopped/,
+    );
+    assert.equal(stopped, true);
+  } finally { await rm(folder, { recursive: true, force: true }); }
+});
+
+it("keeps the older-host spawn fallback without claiming session ownership", async () => {
+  // @ts-expect-error The plugin's native code is plain JavaScript.
+  const { activate } = await import("../plugins/godot/native/index.mjs");
+  const folder = await mkdtemp(path.join(tmpdir(), "godot-editor-fallback-"));
+  try {
+    const commands = new Map<string, (input: unknown, call: unknown) => Promise<unknown>>();
+    let disposals = 0;
+    await activate({
+      project: { folder },
+      registerProjectType() {},
+      registerTool() {},
+      registerCommand(name: string, handler: (input: unknown, call: unknown) => Promise<unknown>) {
+        commands.set(name, handler);
+      },
+      onDispose() { disposals += 1; },
+    });
+    const result = await commands.get("runInGodot")!({}, {
+      configuration: { godotPath: process.execPath },
+      signal: new AbortController().signal,
+    });
+    assert.deepEqual(result, { started: true });
+    assert.equal(disposals, 1);
+  } finally { await rm(folder, { recursive: true, force: true }); }
+});
