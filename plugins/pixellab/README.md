@@ -8,8 +8,9 @@ and pixel-art edits, as models in the Image node. Requires OhMyGame plugin API
 ## Connect
 
 1. Create an API key in your PixelLab account.
-2. Add the plugin and approve `api.pixellab.ai`, `cdn.pixellab.ai` and
-   `supabase.pixellab.ai`, where PixelLab stores some results.
+2. Add the plugin and approve `api.pixellab.ai`, plus `cdn.pixellab.ai`,
+   `supabase.pixellab.ai` and `backblaze.pixellab.ai`, where PixelLab stores
+   some results.
 3. Enter the key in plugin settings and turn on **Every project**.
 4. Choose a PixelLab model in an Image node or the model settings.
 

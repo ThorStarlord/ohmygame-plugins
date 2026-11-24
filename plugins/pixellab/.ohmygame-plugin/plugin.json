@@ -1,7 +1,7 @@
 {
   "$schema": "https://www.ohmygame.ai/schema/plugin-2.json",
   "id": "ohmygame/pixellab",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "engines": {
     "ohmygame-api": "^2.34.0"
   },
@@ -12,7 +12,7 @@
   "categories": ["art"],
   "beta": true,
   "capabilities": {
-    "network": ["api.pixellab.ai", "cdn.pixellab.ai", "supabase.pixellab.ai"]
+    "network": ["api.pixellab.ai", "cdn.pixellab.ai", "supabase.pixellab.ai", "backblaze.pixellab.ai"]
   },
   "configuration": {
     "apiKey": {
