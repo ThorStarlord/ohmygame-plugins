@@ -1,7 +1,7 @@
 {
   "name": "@ohmygame/pixellab",
-  "version": "0.1.2",
-  "description": "PixelLab pixel art, characters and skeleton animations.",
+  "version": "0.2.0",
+  "description": "PixelLab pixel art, characters, animations, tilesets and effects.",
   "keywords": [
     "ohmygame-plugin",
     "model-provider",

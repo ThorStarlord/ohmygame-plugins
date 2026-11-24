@@ -20,6 +20,9 @@ const pluginRoot = fileURLToPath(
   new URL("../plugins/pixellab", import.meta.url),
 );
 const API = "https://api.pixellab.ai/v2";
+const CDN = "https://cdn.pixellab.ai";
+/** Endpoints that answer with the picture instead of a job. */
+const DIRECT = new Set(["/create-image-pixflux", "/create-image-bitforge", "/image-to-pixelart", "/resize", "/remove-background", "/rotate"]);
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
   "base64",
@@ -96,9 +99,32 @@ async function setup(t: TestContext, reply?: Reply) {
           { base64: `data:image/png;base64,${PNG.toString("base64")}` },
           { base64: `data:image/png;base64,${PNG.toString("base64")}` },
         ] } })
-        : json({ id: "job", status: "completed" });
-    if (url.startsWith(`${API}/characters/c1/gif`))
+        : json({ id: "job", status: "completed", last_response: {
+          images: [{ base64: PNG.toString("base64") }, { base64: PNG.toString("base64") }],
+          files: { json: `${CDN}/effect.json`, gif: `${CDN}/effect.gif` },
+        } });
+    if (url.startsWith(`${API}/characters/c1/gif`) || url.startsWith(`${API}/characters/c2/gif`) || url.startsWith(`${API}/objects/o1/gif`))
       return new Response(GIF, { headers: { "content-type": "image/gif" } });
+    if (url === `${API}/objects/o1/animations`)
+      return json({ animation_group_id: "og", submissions: [{ direction: "south", background_job_id: "job-oa" }] });
+    if (url === `${API}/create-character-state`)
+      return json({ character_id: "c2", background_job_id: "job-s" });
+    if (url === `${API}/objects/o1`)
+      return json({ id: "o1", status: "completed", rotation_urls: { south: "https://supabase.pixellab.ai/o1/south.png" } });
+    if (url === `${API}/tilesets/t1?layout=tileset15` || url === `${API}/tilesets-sidescroller/t1?layout=tileset15`)
+      return json({ sheet: { layout: "tileset15", image: { type: "base64", base64: PNG.toString("base64") } } });
+    if (url === `${API}/isometric-tiles/i1`)
+      return json({ image: { type: "base64", base64: PNG.toString("base64") } });
+    if (url === `${API}/tiles-pro/i1`)
+      return json({ storage_urls: { tile_0: `${CDN}/tile-0.png`, tile_1: `${CDN}/tile-1.png` } });
+    if (url.endsWith(".png") && (url.startsWith(CDN) || url.startsWith("https://supabase.pixellab.ai/")))
+      return new Response(PNG, { headers: { "content-type": "image/png" } });
+    if (url === `${CDN}/effect.gif`)
+      return new Response(GIF, { headers: { "content-type": "image/gif" } });
+    if (DIRECT.has(url.slice(API.length)))
+      return json({ image: { type: "base64", base64: `data:image/png;base64,${PNG.toString("base64")}` } });
+    if (request.method === "POST" && url.startsWith(API))
+      return json({ background_job_id: "job-n", character_id: "c1", object_id: "o1", tileset_id: "t1", tile_id: "i1" });
     return json({ detail: "not found" }, 404);
   };
   const media: Media = new PluginMediaProviders(services, fetcher, undefined, undefined, root);
@@ -286,5 +312,110 @@ it("shows PixelLab's error and refuses an animation without a reference", async 
       { journal: await s.journal("no-reference") },
     ),
     /Skeleton animation needs one character reference image/,
+  );
+});
+
+const picture = async (width: number, height: number, format: "png" | "jpeg" | "webp" = "png") => {
+  const image = sharp({ create: { width, height, channels: 4, background: "#336699" } }) as unknown as Record<string, () => { toBuffer(): Promise<Buffer> }>;
+  return { mediaType: `image/${format}` as const, data: (await image[format]!().toBuffer()).toString("base64") };
+};
+
+it("declares every PixelLab model the plugin implements", async (t) => {
+  const s = await setup(t);
+  const [provider] = await s.media.imageProviders();
+  assert.equal(provider!.models.length, 38);
+  assert.equal(s.model("interpolation").minReferenceImages, 2);
+  assert.equal(s.model("tileset").maxReferenceImages, 0);
+  assert.equal(s.model("to-pixel-art").promptOptionalWithReference, true);
+  assert.equal(s.model("pixflux").supportsResolution, false);
+});
+
+it("sends each model's request and returns its result", async (t) => {
+  const s = await setup(t);
+  const ref = await picture(64, 64);
+  type Case = {
+    model: string;
+    prompt?: string;
+    images?: number;
+    aspectRatio?: "16:9";
+    post: string[];
+    body?: Record<string, unknown>;
+    result?: string;
+  };
+  const cases: Case[] = [
+    { model: "pixflux", aspectRatio: "16:9", post: ["/create-image-pixflux"], body: { image_size: { width: 192, height: 108 } } },
+    { model: "bitforge", images: 1, post: ["/create-image-bitforge"], body: { style_strength: 50 } },
+    { model: "image-pro", images: 2, post: ["/generate-image-v2"] },
+    { model: "style-pro", images: 1, post: ["/generate-with-style-v2"] },
+    { model: "image-pro-flash", post: ["/create-image-pro-flash"], body: { image_size: { width: 128, height: 128 } } },
+    { model: "ui", post: ["/generate-ui-v2"] },
+    { model: "to-pixel-art", prompt: "", images: 1, post: ["/image-to-pixelart"], body: { image_size: { width: 64, height: 64 }, output_size: { width: 16, height: 16 } } },
+    { model: "to-pixel-art-pro-flash", prompt: "", images: 1, post: ["/image-to-pixelart-pro-flash"] },
+    { model: "resize-2x", prompt: "", images: 1, post: ["/resize"], body: { target_size: { width: 128, height: 128 }, description: "the subject in the reference image" } },
+    { model: "remove-background", prompt: "", images: 1, post: ["/remove-background"] },
+    { model: "normal-map", prompt: "", images: 1, post: ["/normal-map"] },
+    { model: "edit", images: 1, post: ["/edit-image"], body: { width: 64, height: 64 } },
+    { model: "edit-pro", images: 1, post: ["/edit-images-v2"], body: { method: "edit_with_text" } },
+    { model: "edit-pro-flash", images: 1, post: ["/edit-image-pro-flash"] },
+    { model: "character-4", images: 1, post: ["/create-character-with-4-directions"], body: { image_size: { width: 64, height: 64 } }, result: "image/gif" },
+    { model: "character-8", post: ["/create-character-with-8-directions"], body: { mode: "standard" }, result: "image/gif" },
+    { model: "character-pro", post: ["/create-character-pro"], result: "image/gif" },
+    { model: "character-pro-flash", prompt: "", images: 1, post: ["/create-character-pro-flash"], result: "image/gif" },
+    { model: "character-state", images: 1, post: ["/create-character-v3", "/create-character-state"], result: "image/gif" },
+    { model: "pixminimax-animation", images: 1, post: ["/animate-pixminimax"], result: "image/gif" },
+    { model: "animation-pro", images: 1, post: ["/animate-with-text-v2"], result: "image/gif" },
+    { model: "interpolation", images: 2, post: ["/interpolation-v2"], result: "image/gif" },
+    { model: "rotate", prompt: "face north east", images: 1, post: ["/rotate"], body: { to_direction: "north-east" } },
+    { model: "rotations-8", prompt: "", images: 1, post: ["/generate-8-rotations-v3"], result: "image/gif" },
+    { model: "rotations-8-pro", post: ["/generate-8-rotations-v2"], body: { method: "create_with_style" }, result: "image/gif" },
+    { model: "object", post: ["/create-object-pro-flash"] },
+    { model: "object-pro", post: ["/create-1-direction-object"] },
+    { model: "object-8", post: ["/create-8-direction-object"], body: { size: 64 }, result: "image/gif" },
+    { model: "object-animation", images: 1, post: ["/create-object-pro-flash", "/objects/o1/animations"], result: "image/gif" },
+    { model: "tileset", prompt: "grass | water | sand", post: ["/create-tileset"], body: { lower_description: "grass", upper_description: "water", transition_description: "sand" } },
+    { model: "tileset-sidescroller", prompt: "stone bricks", post: ["/create-tileset-sidescroller"], body: { lower_description: "stone bricks" } },
+    { model: "isometric-tile", post: ["/create-isometric-tile"] },
+    { model: "tiles-pro", post: ["/create-tiles-pro"] },
+    { model: "vfx", images: 1, post: ["/vfx"], result: "image/gif" },
+  ];
+  for (const item of cases) {
+    const before = s.requests.length;
+    const image = await s.media.generateImage(
+      s.model(item.model),
+      {
+        prompt: item.prompt ?? "a mossy rock",
+        ...(item.aspectRatio ? { aspectRatio: item.aspectRatio } : {}),
+        images: Array.from({ length: item.images ?? 0 }, () => ref),
+      },
+      undefined,
+      { journal: await s.journal(item.model) },
+    );
+    assert.equal(image.mediaType, item.result ?? "image/png", item.model);
+    const posts = s.requests.slice(before).filter((r) => r.method === "POST");
+    assert.deepEqual(posts.map((r) => r.url.slice(API.length)), item.post, item.model);
+    for (const [key, value] of Object.entries(item.body ?? {}))
+      assert.deepEqual(posts[0]!.body?.[key], value, `${item.model} ${key}`);
+  }
+});
+
+it("reads JPEG and WebP reference sizes and refuses an unsplit tileset", async (t) => {
+  const s = await setup(t);
+  await s.media.generateImage(
+    s.model("remove-background"),
+    { prompt: "", images: [await picture(48, 40, "webp")] },
+    undefined,
+    { journal: await s.journal("webp") },
+  );
+  await s.media.generateImage(
+    s.model("edit"),
+    { prompt: "add a hat", images: [await picture(36, 52, "jpeg")] },
+    undefined,
+    { journal: await s.journal("jpeg") },
+  );
+  const sizes = s.requests.filter((r) => r.method === "POST").map((r) => r.body?.image_size);
+  assert.deepEqual(sizes, [{ width: 48, height: 40 }, { width: 36, height: 52 }]);
+  await assert.rejects(
+    s.media.generateImage(s.model("tileset"), { prompt: "grass" }, undefined, { journal: await s.journal("tileset") }),
+    /lower terrain \| upper terrain/,
   );
 });
