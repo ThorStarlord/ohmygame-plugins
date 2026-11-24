@@ -116,6 +116,7 @@ async function ensureWebPreset(folder) {
     'platform="Web"',
     "runnable=true",
     'export_filter="all_resources"',
+    'include_filter=""',
     'exclude_filter=".ohmygame/*"',
     `export_path="${WEB_BUILD_FOLDER}/index.html"`,
     "",
