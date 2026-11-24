@@ -19,16 +19,16 @@ quality.
 | A picture in a given style | `bitforge` (128px), `style-pro` | `bitforge`: optional style; `style-pro`: 1–4 style pictures |
 | A picture guided by subject references | `image-pro` (256px long side) | up to 4 |
 | Game UI: buttons, bars, slots, panels | `ui` | optional concept picture |
-| A character turning through its directions | `character-4`, `character-8` (64×64), `character` (v3), `character-pro`, `character-pro-flash` | optional south-facing picture; `character-pro` uses it as style |
+| A character turning through its directions | `character-4`, `character-8` (64×64), `character` (v3: `directions` 4 or 8, `view`), `character-pro`, `character-pro-flash` | optional south-facing picture; `character-pro` uses it as style |
 | A variant of a character (outfit, pose) | `character-state` | the character; the prompt is the change |
 | A character or sprite moving | `frame-animation`, `pixminimax-animation`, `animation-pro`, `skeleton-animation` | one picture; the prompt is the motion |
 | Frames between two pictures | `interpolation` | start, then end; the prompt is the change |
-| A sprite facing another way | `rotate` | one south-facing picture; name the direction in English, such as `west` |
+| A sprite facing another way | `rotate` | one picture; settings `from` (default `south`) and `to` (default `east`) |
 | A sprite in all eight directions | `rotations-8`, `rotations-8-pro` | one south-facing picture (`rotations-8-pro` can also start from a description) |
 | A prop or item | `object` (64×64), `object-pro`, `object-8` | optional style (`object`) or the object to turn (`object-8`) |
 | A prop moving | `object-animation` | the object; the prompt is the motion |
-| A top-down terrain tileset | `tileset` | none; prompt `lower terrain \| upper terrain`, optionally `\| transition` |
-| Platformer tiles | `tileset-sidescroller` | none; prompt `platform material`, optionally `\| surface` |
+| A top-down terrain tileset | `tileset` | none; the prompt is the lower terrain, settings `upper` and optional `transition` |
+| Platformer tiles | `tileset-sidescroller` | none; the prompt is the platform material, optional setting `surface` |
 | A single isometric block, or square tiles | `isometric-tile`, `tiles-pro` | none |
 | An animated effect | `vfx` | optional sprite the effect plays around |
 | Pixel art from a photo or painting | `to-pixel-art`, `to-pixel-art-pro-flash` | one picture; the prompt is optional |
@@ -40,8 +40,20 @@ quality.
 
 - Describe the subject in plain English for pictures, characters and objects.
 - For animations, describe the motion only: `walk in place`, `sword slash`.
-- For tilesets, separate the parts with `|`, such as `grass | shallow water | sand`.
-  The plugin refuses a top-down tileset without both terrains.
+- For tilesets, the prompt is the lower terrain or the platform material; set
+  the rest as settings, such as prompt `grass` with
+  `params: { "upper": "shallow water", "transition": "sand" }`. The plugin
+  refuses a top-down tileset without `upper`.
+
+## Settings
+
+Some models take settings of their own as `params` in `generate_image`;
+`inspect_media_models` lists each one with its choices and default. Leave a
+setting out to use its default: `character` `directions` (`4` or `8`) and
+`view`, `object` `view`, `frame-animation` `frames` (4–16), `rotate` `from`
+and `to`, `tileset` `upper`, `transition`, `tileSize` and `view`,
+`tileset-sidescroller` `surface` and `tileSize`, and `vfx` `artist` (`lite`
+or `pro`, which costs more).
 
 ## Results and references
 

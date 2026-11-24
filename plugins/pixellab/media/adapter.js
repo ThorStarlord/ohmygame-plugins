@@ -3,11 +3,11 @@
 // checks the original job instead of paying again. Results are PixelLab's own
 // files, shown as they are: a PNG for pictures and tiles, a GIF for characters,
 // objects and effects. Models with animation frames return each frame for the
-// app to compose.
+// app to compose. A model's settings arrive as `input.params`, checked by the
+// app and with every default filled in.
 const API = "https://api.pixellab.ai/v2";
 const REFERENCE = "the character in the reference image";
 const SUBJECT = "the subject in the reference image";
-const DIRECTIONS = ["south", "south-east", "east", "north-east", "north", "north-west", "west", "south-west"];
 const ASPECT_RATIOS = { "1:1": [1, 1], "4:3": [4, 3], "3:4": [3, 4], "16:9": [16, 9], "9:16": [9, 16] };
 /** The edge a sprite is drawn at when nothing else sets it. */
 const SPRITE = 64;
@@ -139,7 +139,7 @@ const MODELS = {
   "frame-animation": (input, host) => queued(host, "animation", "/animate-with-text-v3", {
     first_frame: { base64: dataUrl(input.references[0]) },
     action: input.prompt,
-    frame_count: 8,
+    frame_count: input.params.frames,
     no_background: input.transparentBackground === true,
   }, { phase: "frame-animation" }),
   "pixminimax-animation": (input, host) => queued(host, "animation", "/animate-pixminimax", {
@@ -181,8 +181,8 @@ const MODELS = {
     return direct(host, "image", "/rotate", {
       from_image: picture(source),
       image_size: size,
-      from_direction: "south",
-      to_direction: direction(input.prompt) ?? "east",
+      from_direction: input.params.from,
+      to_direction: input.params.to,
     });
   },
   "rotations-8": (input, host) => queued(host, "image", "/generate-8-rotations-v3", {
@@ -204,7 +204,7 @@ const MODELS = {
   },
 
   // Characters, shown as PixelLab's GIF turning through their directions.
-  character: (input, host) => character(input, host, input.prompt, null),
+  character: (input, host) => character(input, host, input.prompt, null, { n_directions: Number(input.params.directions), view: input.params.view }),
   "character-4": (input, host) => directional(input, host, "/create-character-with-4-directions", {}),
   "character-8": (input, host) => directional(input, host, "/create-character-with-8-directions", { mode: "standard" }),
   "character-pro": (input, host) => {
@@ -233,6 +233,7 @@ const MODELS = {
     return objectJob(host, "/create-object-pro-flash", {
       description: input.prompt,
       n_directions: 1,
+      view: input.params.view,
       image_size: { width: SPRITE, height: SPRITE },
       ...(style ? { style_image: boxed(style) } : {}),
     });
@@ -255,23 +256,24 @@ const MODELS = {
   }, { action: input.prompt }),
 
   // Maps.
+  // The description is the lower terrain, or the platform; the rest are settings.
   tileset: (input, host) => {
-    const [lower, upper, transition] = parts(input.prompt);
-    if (!lower || !upper) return { error: "Describe the tileset as lower terrain | upper terrain, such as `grass | water`" };
+    const { upper, transition } = input.params;
+    if (!upper?.trim()) return { error: "Set the upper terrain, such as shallow water" };
     return queued(host, "tileset", "/create-tileset", {
-      lower_description: lower,
-      upper_description: upper,
-      ...(transition ? { transition_description: transition, transition_size: 0.25 } : {}),
-      tile_size: { width: 32, height: 32 },
+      lower_description: input.prompt,
+      upper_description: upper.trim(),
+      ...(transition?.trim() ? { transition_description: transition.trim(), transition_size: 0.25 } : {}),
+      tile_size: tile(input.params.tileSize),
+      view: input.params.view,
     }, { phase: "tileset", path: "tilesets", idField: "tileset_id" });
   },
   "tileset-sidescroller": (input, host) => {
-    const [platform, surface] = parts(input.prompt);
-    if (!platform) return { error: "Describe the platform, optionally with its surface: `stone bricks | moss`" };
+    const surface = input.params.surface?.trim();
     return queued(host, "tileset", "/create-tileset-sidescroller", {
-      lower_description: platform,
+      lower_description: input.prompt,
       ...(surface ? { transition_description: surface, transition_size: 0.25 } : {}),
-      tile_size: { width: 32, height: 32 },
+      tile_size: tile(input.params.tileSize),
     }, { phase: "tileset", path: "tilesets-sidescroller", idField: "tileset_id" });
   },
   "isometric-tile": (input, host) => queued(host, "tile", "/create-isometric-tile", {
@@ -289,7 +291,7 @@ const MODELS = {
     const sprite = input.references?.[0];
     return queued(host, "effect", "/vfx", {
       description: input.prompt,
-      artist: "lite",
+      artist: input.params.artist,
       ...(sprite ? { sprite: picture(sprite) } : {}),
     }, { phase: "effect" });
   },
@@ -357,11 +359,11 @@ async function queued(host, name, path, json, next = { phase: "image" }) {
 }
 
 /** Starts a character from a description or reference; an action or edit follows once it is ready. */
-async function character(input, host, description, then) {
+async function character(input, host, description, then, options = { n_directions: 8 }) {
   const reference = input.references?.[0];
   return characterJob(host, "/create-character-v3", {
     description: description || REFERENCE,
-    n_directions: 8,
+    ...options,
     no_background: true,
     ...(reference ? { reference_image: picture(reference) } : {}),
   }, then ?? {});
@@ -542,19 +544,10 @@ function scaled(size, factor, min, max) {
   return { width: side(size.width), height: side(size.height) };
 }
 
-/** The prompt's parts, split on `|`, `->` or new lines. */
-function parts(prompt) {
-  return String(prompt ?? "").split(/\s*(?:\||->|→|\n)\s*/).map((part) => part.trim()).filter(Boolean);
-}
-
-/** The first compass direction named in a prompt, such as `north-east` or `west`. */
-function direction(prompt) {
-  const text = String(prompt ?? "").toLowerCase().replace(/[\s_]+/g, "-");
-  const found = DIRECTIONS
-    .map((name) => ({ name, at: text.search(new RegExp(`(^|[^a-z])${name}($|[^a-z-])`)) }))
-    .filter((item) => item.at >= 0)
-    .sort((a, b) => a.at - b.at || b.name.length - a.name.length)[0];
-  return found?.name;
+/** A square tile of a declared size, such as `"32"`. */
+function tile(size) {
+  const side = Number(size);
+  return { width: side, height: side };
 }
 
 /** A PNG, GIF, WebP or JPEG reference's pixel size, read from its header. */

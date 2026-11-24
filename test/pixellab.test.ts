@@ -329,6 +329,10 @@ it("declares every PixelLab model the plugin implements", async (t) => {
   assert.equal(s.model("tileset").maxReferenceImages, 0);
   assert.equal(s.model("to-pixel-art").promptOptionalWithReference, true);
   assert.equal(s.model("pixflux").supportsResolution, false);
+  // Pixen makes one size, so the node offers no size to pick.
+  assert.equal(s.model("pixen").supportsResolution, false);
+  assert.deepEqual(s.model("character").params?.map((param: { key: string }) => param.key), ["directions", "view"]);
+  assert.deepEqual(s.model("interpolation").referenceImageLabels, ["Start picture", "End picture"]);
 });
 
 it("sends each model's request and returns its result", async (t) => {
@@ -338,6 +342,7 @@ it("sends each model's request and returns its result", async (t) => {
     model: string;
     prompt?: string;
     images?: number;
+    params?: Record<string, string | number | boolean>;
     aspectRatio?: "16:9";
     post: string[];
     body?: Record<string, unknown>;
@@ -360,24 +365,25 @@ it("sends each model's request and returns its result", async (t) => {
     { model: "edit-pro-flash", images: 1, post: ["/edit-image-pro-flash"] },
     { model: "character-4", images: 1, post: ["/create-character-with-4-directions"], body: { image_size: { width: 64, height: 64 } }, result: "image/gif" },
     { model: "character-8", post: ["/create-character-with-8-directions"], body: { mode: "standard" }, result: "image/gif" },
+    { model: "character", params: { directions: "4", view: "side" }, post: ["/create-character-v3"], body: { n_directions: 4, view: "side" }, result: "image/gif" },
     { model: "character-pro", post: ["/create-character-pro"], result: "image/gif" },
     { model: "character-pro-flash", prompt: "", images: 1, post: ["/create-character-pro-flash"], result: "image/gif" },
     { model: "character-state", images: 1, post: ["/create-character-v3", "/create-character-state"], result: "image/gif" },
     { model: "pixminimax-animation", images: 1, post: ["/animate-pixminimax"], result: "image/gif" },
     { model: "animation-pro", images: 1, post: ["/animate-with-text-v2"], result: "image/gif" },
     { model: "interpolation", images: 2, post: ["/interpolation-v2"], result: "image/gif" },
-    { model: "rotate", prompt: "face north east", images: 1, post: ["/rotate"], body: { to_direction: "north-east" } },
+    { model: "rotate", prompt: "", params: { to: "north-east" }, images: 1, post: ["/rotate"], body: { from_direction: "south", to_direction: "north-east" } },
     { model: "rotations-8", prompt: "", images: 1, post: ["/generate-8-rotations-v3"], result: "image/gif" },
     { model: "rotations-8-pro", post: ["/generate-8-rotations-v2"], body: { method: "create_with_style" }, result: "image/gif" },
-    { model: "object", post: ["/create-object-pro-flash"] },
+    { model: "object", post: ["/create-object-pro-flash"], body: { view: "low top-down" } },
     { model: "object-pro", post: ["/create-1-direction-object"] },
     { model: "object-8", post: ["/create-8-direction-object"], body: { size: 64 }, result: "image/gif" },
     { model: "object-animation", images: 1, post: ["/create-object-pro-flash", "/objects/o1/animations"], result: "image/gif" },
-    { model: "tileset", prompt: "grass | water | sand", post: ["/create-tileset"], body: { lower_description: "grass", upper_description: "water", transition_description: "sand" } },
-    { model: "tileset-sidescroller", prompt: "stone bricks", post: ["/create-tileset-sidescroller"], body: { lower_description: "stone bricks" } },
+    { model: "tileset", prompt: "grass", params: { upper: "water", transition: "sand", tileSize: "16" }, post: ["/create-tileset"], body: { lower_description: "grass", upper_description: "water", transition_description: "sand", tile_size: { width: 16, height: 16 }, view: "high top-down" } },
+    { model: "tileset-sidescroller", prompt: "stone bricks", params: { surface: "moss" }, post: ["/create-tileset-sidescroller"], body: { lower_description: "stone bricks", transition_description: "moss", tile_size: { width: 32, height: 32 } } },
     { model: "isometric-tile", post: ["/create-isometric-tile"] },
     { model: "tiles-pro", post: ["/create-tiles-pro"] },
-    { model: "vfx", images: 1, post: ["/vfx"], result: "image/gif" },
+    { model: "vfx", images: 1, params: { artist: "pro" }, post: ["/vfx"], body: { artist: "pro" }, result: "image/gif" },
   ];
   for (const item of cases) {
     const before = s.requests.length;
@@ -386,6 +392,7 @@ it("sends each model's request and returns its result", async (t) => {
       {
         prompt: item.prompt ?? "a mossy rock",
         ...(item.aspectRatio ? { aspectRatio: item.aspectRatio } : {}),
+        ...(item.params ? { params: item.params } : {}),
         images: Array.from({ length: item.images ?? 0 }, () => ref),
       },
       undefined,
@@ -399,7 +406,7 @@ it("sends each model's request and returns its result", async (t) => {
   }
 });
 
-it("reads JPEG and WebP reference sizes and refuses an unsplit tileset", async (t) => {
+it("reads JPEG and WebP reference sizes and refuses a tileset without its upper terrain", async (t) => {
   const s = await setup(t);
   await s.media.generateImage(
     s.model("remove-background"),
@@ -417,6 +424,11 @@ it("reads JPEG and WebP reference sizes and refuses an unsplit tileset", async (
   assert.deepEqual(sizes, [{ width: 48, height: 40 }, { width: 36, height: 52 }]);
   await assert.rejects(
     s.media.generateImage(s.model("tileset"), { prompt: "grass" }, undefined, { journal: await s.journal("tileset") }),
-    /lower terrain \| upper terrain/,
+    /Set the upper terrain/,
+  );
+  // A setting the model doesn't have never reaches PixelLab.
+  await assert.rejects(
+    s.media.generateImage(s.model("pixflux"), { prompt: "grass", params: { view: "side" } }, undefined, { journal: await s.journal("pixflux") }),
+    /has no settings/,
   );
 });

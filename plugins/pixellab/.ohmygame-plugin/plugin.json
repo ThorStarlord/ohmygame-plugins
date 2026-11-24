@@ -1,9 +1,9 @@
 {
   "$schema": "https://www.ohmygame.ai/schema/plugin-2.json",
   "id": "ohmygame/pixellab",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "engines": {
-    "ohmygame-api": "^2.34.0"
+    "ohmygame-api": "^2.38.0"
   },
   "displayName": "%plugin.name%",
   "description": "%plugin.description%",
@@ -37,8 +37,10 @@
               {
                 "id": "pixen",
                 "title": "%model.pixen%",
-                "resolutions": ["512"],
-                "aspectRatios": ["1:1"],
+                "supportsResolution": false,
+                "resolutions": [],
+                "supportsAspectRatio": false,
+                "aspectRatios": [],
                 "maxReferenceImages": 0
               },
               {
@@ -206,11 +208,35 @@
               {
                 "id": "character",
                 "title": "%model.character%",
-                "resolutions": ["512"],
-                "aspectRatios": ["1:1"],
+                "supportsResolution": false,
+                "resolutions": [],
+                "supportsAspectRatio": false,
+                "aspectRatios": [],
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 256,
-                "promptOptionalWithReference": true
+                "promptOptionalWithReference": true,
+                "params": {
+                  "directions": {
+                    "type": "select",
+                    "title": "%param.directions%",
+                    "default": "8",
+                    "options": [
+                      { "value": "4", "title": "%directions.4%" },
+                      { "value": "8", "title": "%directions.8%" }
+                    ]
+                  },
+                  "view": {
+                    "type": "select",
+                    "title": "%param.view%",
+                    "default": "low top-down",
+                    "options": [
+                      { "value": "low top-down", "title": "%view.lowTopDown%" },
+                      { "value": "high top-down", "title": "%view.highTopDown%" },
+                      { "value": "side", "title": "%view.side%" }
+                    ]
+                  }
+                },
+                "referenceImageLabels": ["%reference.subject%"]
               },
               {
                 "id": "character-4",
@@ -222,7 +248,8 @@
                 "aspectRatios": [],
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 128,
-                "promptOptionalWithReference": true
+                "promptOptionalWithReference": true,
+                "referenceImageLabels": ["%reference.south%"]
               },
               {
                 "id": "character-8",
@@ -234,7 +261,8 @@
                 "aspectRatios": [],
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 128,
-                "promptOptionalWithReference": true
+                "promptOptionalWithReference": true,
+                "referenceImageLabels": ["%reference.south%"]
               },
               {
                 "id": "character-pro",
@@ -257,7 +285,8 @@
                 "aspectRatios": [],
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 128,
-                "promptOptionalWithReference": true
+                "promptOptionalWithReference": true,
+                "referenceImageLabels": ["%reference.south%"]
               },
               {
                 "id": "character-state",
@@ -269,26 +298,42 @@
                 "aspectRatios": [],
                 "minReferenceImages": 1,
                 "maxReferenceImages": 1,
-                "maxReferenceImageDimension": 256
+                "maxReferenceImageDimension": 256,
+                "referenceImageLabels": ["%reference.subject%"]
               },
               {
                 "id": "skeleton-animation",
                 "title": "%model.animation%",
-                "resolutions": ["512"],
-                "aspectRatios": ["1:1"],
+                "supportsResolution": false,
+                "resolutions": [],
+                "supportsAspectRatio": false,
+                "aspectRatios": [],
                 "minReferenceImages": 1,
                 "maxReferenceImages": 1,
-                "maxReferenceImageDimension": 256
+                "maxReferenceImageDimension": 256,
+                "referenceImageLabels": ["%reference.subject%"]
               },
               {
                 "id": "frame-animation",
                 "title": "%model.frameAnimation%",
-                "resolutions": ["512"],
-                "aspectRatios": ["1:1"],
+                "supportsResolution": false,
+                "resolutions": [],
+                "supportsAspectRatio": false,
+                "aspectRatios": [],
                 "minReferenceImages": 1,
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 256,
-                "animationFrames": true
+                "animationFrames": true,
+                "params": {
+                  "frames": {
+                    "type": "number",
+                    "title": "%param.frames%",
+                    "default": 8,
+                    "minimum": 4,
+                    "maximum": 16
+                  }
+                },
+                "referenceImageLabels": ["%reference.firstFrame%"]
               },
               {
                 "id": "pixminimax-animation",
@@ -301,7 +346,8 @@
                 "minReferenceImages": 1,
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 256,
-                "animationFrames": true
+                "animationFrames": true,
+                "referenceImageLabels": ["%reference.firstFrame%"]
               },
               {
                 "id": "animation-pro",
@@ -314,7 +360,8 @@
                 "minReferenceImages": 1,
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 256,
-                "animationFrames": true
+                "animationFrames": true,
+                "referenceImageLabels": ["%reference.firstFrame%"]
               },
               {
                 "id": "interpolation",
@@ -327,7 +374,8 @@
                 "minReferenceImages": 2,
                 "maxReferenceImages": 2,
                 "maxReferenceImageDimension": 128,
-                "animationFrames": true
+                "animationFrames": true,
+                "referenceImageLabels": ["%reference.start%", "%reference.end%"]
               },
               {
                 "id": "rotate",
@@ -340,7 +388,40 @@
                 "minReferenceImages": 1,
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 200,
-                "promptOptionalWithReference": true
+                "promptOptionalWithReference": true,
+                "params": {
+                  "from": {
+                    "type": "select",
+                    "title": "%param.fromDirection%",
+                    "default": "south",
+                    "options": [
+                      { "value": "south", "title": "%direction.south%" },
+                      { "value": "south-east", "title": "%direction.south-east%" },
+                      { "value": "east", "title": "%direction.east%" },
+                      { "value": "north-east", "title": "%direction.north-east%" },
+                      { "value": "north", "title": "%direction.north%" },
+                      { "value": "north-west", "title": "%direction.north-west%" },
+                      { "value": "west", "title": "%direction.west%" },
+                      { "value": "south-west", "title": "%direction.south-west%" }
+                    ]
+                  },
+                  "to": {
+                    "type": "select",
+                    "title": "%param.toDirection%",
+                    "default": "east",
+                    "options": [
+                      { "value": "south", "title": "%direction.south%" },
+                      { "value": "south-east", "title": "%direction.south-east%" },
+                      { "value": "east", "title": "%direction.east%" },
+                      { "value": "north-east", "title": "%direction.north-east%" },
+                      { "value": "north", "title": "%direction.north%" },
+                      { "value": "north-west", "title": "%direction.north-west%" },
+                      { "value": "west", "title": "%direction.west%" },
+                      { "value": "south-west", "title": "%direction.south-west%" }
+                    ]
+                  }
+                },
+                "referenceImageLabels": ["%reference.subject%"]
               },
               {
                 "id": "rotations-8",
@@ -354,7 +435,8 @@
                 "maxReferenceImages": 1,
                 "maxReferenceImageDimension": 256,
                 "promptOptionalWithReference": true,
-                "animationFrames": true
+                "animationFrames": true,
+                "referenceImageLabels": ["%reference.south%"]
               },
               {
                 "id": "rotations-8-pro",
@@ -378,7 +460,20 @@
                 "supportsAspectRatio": false,
                 "aspectRatios": [],
                 "maxReferenceImages": 1,
-                "maxReferenceImageDimension": 256
+                "maxReferenceImageDimension": 256,
+                "params": {
+                  "view": {
+                    "type": "select",
+                    "title": "%param.view%",
+                    "default": "low top-down",
+                    "options": [
+                      { "value": "low top-down", "title": "%view.lowTopDown%" },
+                      { "value": "high top-down", "title": "%view.highTopDown%" },
+                      { "value": "side", "title": "%view.side%" }
+                    ]
+                  }
+                },
+                "referenceImageLabels": ["%reference.style%"]
               },
               {
                 "id": "object-pro",
@@ -412,7 +507,8 @@
                 "aspectRatios": [],
                 "minReferenceImages": 1,
                 "maxReferenceImages": 1,
-                "maxReferenceImageDimension": 128
+                "maxReferenceImageDimension": 128,
+                "referenceImageLabels": ["%reference.subject%"]
               },
               {
                 "id": "tileset",
@@ -422,7 +518,29 @@
                 "resolutions": [],
                 "supportsAspectRatio": false,
                 "aspectRatios": [],
-                "maxReferenceImages": 0
+                "maxReferenceImages": 0,
+                "params": {
+                  "upper": { "type": "text", "title": "%param.upper%", "description": "%param.upper.description%" },
+                  "transition": { "type": "text", "title": "%param.transition%", "description": "%param.transition.description%" },
+                  "tileSize": {
+                    "type": "select",
+                    "title": "%param.tileSize%",
+                    "default": "32",
+                    "options": [
+                      { "value": "16", "title": "16 px" },
+                      { "value": "32", "title": "32 px" }
+                    ]
+                  },
+                  "view": {
+                    "type": "select",
+                    "title": "%param.view%",
+                    "default": "high top-down",
+                    "options": [
+                      { "value": "low top-down", "title": "%view.lowTopDown%" },
+                      { "value": "high top-down", "title": "%view.highTopDown%" }
+                    ]
+                  }
+                }
               },
               {
                 "id": "tileset-sidescroller",
@@ -432,7 +550,19 @@
                 "resolutions": [],
                 "supportsAspectRatio": false,
                 "aspectRatios": [],
-                "maxReferenceImages": 0
+                "maxReferenceImages": 0,
+                "params": {
+                  "surface": { "type": "text", "title": "%param.surface%", "description": "%param.surface.description%" },
+                  "tileSize": {
+                    "type": "select",
+                    "title": "%param.tileSize%",
+                    "default": "32",
+                    "options": [
+                      { "value": "16", "title": "16 px" },
+                      { "value": "32", "title": "32 px" }
+                    ]
+                  }
+                }
               },
               {
                 "id": "isometric-tile",
@@ -463,12 +593,42 @@
                 "supportsAspectRatio": false,
                 "aspectRatios": [],
                 "maxReferenceImages": 1,
-                "maxReferenceImageDimension": 512
+                "maxReferenceImageDimension": 512,
+                "params": {
+                  "artist": {
+                    "type": "select",
+                    "title": "%param.artist%",
+                    "default": "lite",
+                    "options": [
+                      { "value": "lite", "title": "%artist.lite%" },
+                      { "value": "pro", "title": "%artist.pro%" }
+                    ]
+                  }
+                },
+                "referenceImageLabels": ["%reference.sprite%"]
               }
             ]
           }
         }
       }
+    ],
+    "canvasPresets": [
+      { "id": "pixflux", "title": "%preset.pixflux%", "description": "%preset.pixflux.description%", "board": "./presets/pixflux.json", "preview": "./presets/pixflux.png" },
+      { "id": "object", "title": "%preset.object%", "description": "%preset.object.description%", "board": "./presets/object.json", "preview": "./presets/object.png" },
+      { "id": "object-8", "title": "%preset.object-8%", "description": "%preset.object-8.description%", "board": "./presets/object-8.json", "preview": "./presets/object-8.gif" },
+      { "id": "character-4", "title": "%preset.character-4%", "description": "%preset.character-4.description%", "board": "./presets/character-4.json", "preview": "./presets/character-4.gif" },
+      { "id": "character-8", "title": "%preset.character-8%", "description": "%preset.character-8.description%", "board": "./presets/character-8.json", "preview": "./presets/character-8.gif" },
+      { "id": "character-state", "title": "%preset.character-state%", "description": "%preset.character-state.description%", "board": "./presets/character-state.json", "preview": "./presets/character-state.gif" },
+      { "id": "rotations-8", "title": "%preset.rotations-8%", "description": "%preset.rotations-8.description%", "board": "./presets/rotations-8.json", "preview": "./presets/rotations-8.gif" },
+      { "id": "frame-animation", "title": "%preset.frame-animation%", "description": "%preset.frame-animation.description%", "board": "./presets/frame-animation.json", "preview": "./presets/frame-animation.gif" },
+      { "id": "object-animation", "title": "%preset.object-animation%", "description": "%preset.object-animation.description%", "board": "./presets/object-animation.json", "preview": "./presets/object-animation.gif" },
+      { "id": "vfx", "title": "%preset.vfx%", "description": "%preset.vfx.description%", "board": "./presets/vfx.json", "preview": "./presets/vfx.gif" },
+      { "id": "tileset", "title": "%preset.tileset%", "description": "%preset.tileset.description%", "board": "./presets/tileset.json", "preview": "./presets/tileset.png" },
+      { "id": "tileset-sidescroller", "title": "%preset.tileset-sidescroller%", "description": "%preset.tileset-sidescroller.description%", "board": "./presets/tileset-sidescroller.json", "preview": "./presets/tileset-sidescroller.png" },
+      { "id": "isometric-tile", "title": "%preset.isometric-tile%", "description": "%preset.isometric-tile.description%", "board": "./presets/isometric-tile.json", "preview": "./presets/isometric-tile.png" },
+      { "id": "ui", "title": "%preset.ui%", "description": "%preset.ui.description%", "board": "./presets/ui.json", "preview": "./presets/ui.png" },
+      { "id": "to-pixel-art", "title": "%preset.to-pixel-art%", "description": "%preset.to-pixel-art.description%", "board": "./presets/to-pixel-art.json", "preview": "./presets/to-pixel-art.png" },
+      { "id": "remove-background", "title": "%preset.remove-background%", "description": "%preset.remove-background.description%", "board": "./presets/remove-background.json", "preview": "./presets/remove-background.png" }
     ],
     "skills": "./skills/"
   }

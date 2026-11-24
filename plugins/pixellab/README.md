@@ -2,8 +2,8 @@
 
 An optional OhMyGame plugin for [PixelLab](https://www.pixellab.ai/): pixel
 art, characters, objects, animations, rotations, tilesets, tiles, effects, UI
-and pixel-art edits, as models in the Image node. Requires OhMyGame plugin API
-**2.34**. It is not preinstalled; add it from the plugin market.
+and pixel-art edits, as models in the Image node, with presets in Asset
+presets. Requires OhMyGame plugin API **2.38**. It is not preinstalled; add it from the plugin market.
 
 ## Connect
 
@@ -20,7 +20,8 @@ including GIF downloads, which PixelLab serves only to the key holder.
 ## Models
 
 Sizes are fixed by each model, so the Image node shows no resolution choice
-for them; the models marked *aspect* offer aspect ratios.
+for them; the models marked *aspect* offer aspect ratios. Settings in
+*italics* show next to the model in the Image node; each has a default.
 
 | Group | Model (ID) | PixelLab endpoint | Input | Result |
 |---|---|---|---|---|
@@ -37,27 +38,31 @@ for them; the models marked *aspect* offer aspect ratios.
 | | Remove background (`remove-background`) | `remove-background` | One picture up to 400px; optional subject text | Transparent PNG |
 | | Normal map (`normal-map`) | `normal-map` | One picture | Normal map PNG |
 | | Edit pixel art (`edit`, `edit-pro`, `edit-pro-flash`) | `edit-image`, `edit-images-v2`, `edit-image-pro-flash` | One picture and the change | PNG at its size |
-| Characters | Character v3 (8 directions) (`character`) | `create-character-v3` | Description, or one reference | GIF turning through 8 directions |
+| Characters | Character v3 (`character`) | `create-character-v3` | Description, or one reference; *directions* (4 or 8), *view* | GIF turning through its directions |
 | | Character (4 / 8 directions) (`character-4`, `character-8`) | `create-character-with-4-directions`, `create-character-with-8-directions` | Description; optional south view, 16–128px | GIF turning through its directions |
 | | Character (Pro) (`character-pro`) | `create-character-pro` | Description; optional style picture | 64×64 GIF, 8 directions |
 | | Character (Pro Flash) (`character-pro-flash`) | `create-character-pro-flash` | Description, or one south view | GIF, 8 directions |
 | | Character variant (`character-state`) | `create-character-v3`, then `create-character-state` | One character and the change | GIF of the new character |
-| Animation | Frame animation (`frame-animation`) | `animate-with-text-v3` | One picture and a motion | 8 frames |
+| Animation | Frame animation (`frame-animation`) | `animate-with-text-v3` | One picture and a motion; *frames* (4–16, 8 by default) | Its frames |
 | | PixMiniMax animation (`pixminimax-animation`) | `animate-pixminimax` | One picture and a motion; Tier 1 plan | 8 frames after the input frame |
 | | Frame animation (Pro) (`animation-pro`) | `animate-with-text-v2` | One picture of at least 32px and a motion | PixelLab's frames |
 | | In-between frames (Pro) (`interpolation`) | `interpolation-v2` | Start and end pictures and the change | PixelLab's frames |
 | | Skeleton animation (`skeleton-animation`) | `create-character-v3`, then `characters/animations` | One character and a motion | South-facing GIF |
-| Rotation | Rotate (`rotate`) | `rotate` | One south-facing picture; a direction in the prompt, east by default | PNG |
+| Rotation | Rotate (`rotate`) | `rotate` | One picture; *from* (south) and *to* (east) | PNG |
 | | 8 rotations (`rotations-8`, `rotations-8-pro`) | `generate-8-rotations-v3`, `generate-8-rotations-v2` | One south-facing picture (Pro also from a description) | 8 frames |
-| Objects | Object (Pro Flash) (`object`) | `create-object-pro-flash` | Description; optional style picture | 64×64 PNG |
+| Objects | Object (Pro Flash) (`object`) | `create-object-pro-flash` | Description; optional style picture; *view* | 64×64 PNG |
 | | Object (Pro) (`object-pro`) | `create-1-direction-object` | Description | First 64×64 candidate |
 | | Object (8 directions) (`object-8`) | `create-8-direction-object` | Description; optional object to turn | GIF turning through 8 directions |
 | | Object animation (`object-animation`) | `create-object-pro-flash`, then `objects/{id}/animations` | One object and a motion | GIF |
-| Maps | Top-down tileset (`tileset`) | `create-tileset` | `lower \| upper`, optionally `\| transition` | 4×4 sheet of 32px tiles |
-| | Sidescroller tileset (`tileset-sidescroller`) | `create-tileset-sidescroller` | Platform, optionally `\| surface` | Sheet of 32px tiles |
+| Maps | Top-down tileset (`tileset`) | `create-tileset` | Lower terrain; *upper terrain*, optional *transition*, *tile size* (16 or 32), *view* | 4×4 sheet of tiles |
+| | Sidescroller tileset (`tileset-sidescroller`) | `create-tileset-sidescroller` | Platform; optional *surface*, *tile size* | Sheet of tiles |
 | | Isometric tile (`isometric-tile`) | `create-isometric-tile` | Description | 32×32 PNG |
 | | Tiles (Pro) (`tiles-pro`) | `create-tiles-pro` | Description | First 32px top-down tile |
-| Effects | Effect (`vfx`) | `vfx` | Description; optional sprite | GIF |
+| Effects | Effect (`vfx`) | `vfx` | Description; optional sprite; *quality* (lite or pro) | GIF |
+
+Asset presets shows a PixelLab pack: 16 one-node presets, one for each common
+job, each an Image node with that model, an example prompt and a picture the
+model made.
 
 Frame results are composed by the app into a GIF. References larger than each
 model's limit are scaled down by the app with nearest-neighbour sampling
