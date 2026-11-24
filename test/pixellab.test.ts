@@ -110,14 +110,15 @@ async function setup(t: TestContext, reply?: Reply) {
     if (url === `${API}/create-character-state`)
       return json({ character_id: "c2", background_job_id: "job-s" });
     if (url === `${API}/objects/o1`)
-      return json({ id: "o1", status: "completed", rotation_urls: { south: "https://supabase.pixellab.ai/o1/south.png" } });
+      // A Pro Flash object, as PixelLab returns it: no named rotations, one stored picture.
+      return json({ id: "o1", status: "completed", rotation_urls: { south: null, west: null }, frame_urls: null, storage_urls: { unknown: "https://backblaze.pixellab.ai/file/o1/rotations/unknown.png" } });
     if (url === `${API}/tilesets/t1?layout=tileset15` || url === `${API}/tilesets-sidescroller/t1?layout=tileset15`)
       return json({ sheet: { layout: "tileset15", image: { type: "base64", base64: PNG.toString("base64") } } });
     if (url === `${API}/isometric-tiles/i1`)
       return json({ image: { type: "base64", base64: PNG.toString("base64") } });
     if (url === `${API}/tiles-pro/i1`)
       return json({ storage_urls: { tile_0: `${CDN}/tile-0.png`, tile_1: `${CDN}/tile-1.png` } });
-    if (url.endsWith(".png") && (url.startsWith(CDN) || url.startsWith("https://supabase.pixellab.ai/")))
+    if (url.endsWith(".png") && (url.startsWith(CDN) || url.startsWith("https://supabase.pixellab.ai/") || url.startsWith("https://backblaze.pixellab.ai/")))
       return new Response(PNG, { headers: { "content-type": "image/png" } });
     if (url === `${CDN}/effect.gif`)
       return new Response(GIF, { headers: { "content-type": "image/gif" } });

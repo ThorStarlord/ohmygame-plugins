@@ -443,7 +443,9 @@ async function object(host, task) {
   if (!response.ok) return { error: await detail(response) };
   const found = await response.json();
   if (["queued", "processing", "pending"].includes(found.status)) return { task, retryAfter: 3 };
-  const url = [found.rotation_urls?.south, ...(Array.isArray(found.frame_urls) ? found.frame_urls : [])].find((value) => typeof value === "string");
+  // A Pro Flash object has no named rotations; its one picture is only among the stored files.
+  const url = [found.rotation_urls?.south, ...(Array.isArray(found.frame_urls) ? found.frame_urls : [])].find((value) => typeof value === "string")
+    ?? link(found.storage_urls, /\.png(\?|$)/);
   return url ? { outputs: [{ url }] } : { error: "PixelLab returned no object picture" };
 }
 
