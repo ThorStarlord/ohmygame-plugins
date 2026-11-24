@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile, mkdir, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { it } from "node:test";
@@ -118,5 +118,38 @@ it("leaves nothing behind when a file is damaged, missing, or ranges aren't serv
     await assert.rejects(installWebTemplates("4.3.stable.official", { fetch: serving(whole, { ranges: false }).fetch, folder: target }), /partial downloads/);
     await assert.rejects(installWebTemplates("4.3.stable.mono.official", { fetch: serving(whole).fetch, folder: target }), /mono/);
     assert.deepEqual(await readdir(folder), []);
+  } finally { await rm(folder, { recursive: true, force: true }); }
+});
+
+it("runs the editor in a managed native session when the host has one", async () => {
+  // @ts-expect-error The plugin's native code is plain JavaScript.
+  const { activate } = await import("../plugins/godot/native/index.mjs");
+  const folder = await mkdtemp(path.join(tmpdir(), "godot-editor-"));
+  try {
+    const executable = path.join(folder, process.platform === "win32" ? "godot.exe" : "godot");
+    await writeFile(executable, "");
+    await chmod(executable, 0o755);
+    const commands = new Map<string, (input: unknown, call: unknown) => Promise<unknown>>();
+    let started: unknown;
+    let stopped = false;
+    await activate({
+      project: { folder },
+      registerProjectType() {},
+      registerTool() {},
+      registerCommand(name: string, handler: (input: unknown, call: unknown) => Promise<unknown>) {
+        commands.set(name, handler);
+      },
+      onDispose() {},
+      nativeSessions: {
+        async start(options: unknown) {
+          started = options;
+          return { id: "session", pid: 1234, label: "Godot", stop: async () => { stopped = true; }, exited: Promise.resolve({ code: 0, signal: null }) };
+        },
+      },
+    });
+    const result = await commands.get("runInGodot")!({}, { configuration: { godotPath: executable }, signal: new AbortController().signal });
+    assert.deepEqual(result, { started: true });
+    assert.deepEqual(started, { executable, args: ["--path", folder, "--editor"], cwd: folder, label: "Godot" });
+    assert.equal(stopped, false);
   } finally { await rm(folder, { recursive: true, force: true }); }
 });
