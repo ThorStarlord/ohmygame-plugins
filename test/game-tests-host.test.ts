@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -13,6 +13,9 @@ import type { GameRuntimeAdapter, PlaytestRequest, PlaytestResult, PlaytestSnaps
 const app = path.resolve(process.env.OHMYGAME_APP ?? "app");
 const load = (file: string) => import(pathToFileURL(path.join(app, file)).href);
 const pluginRoot = fileURLToPath(new URL("../plugins/game-tests", import.meta.url));
+const manifest = JSON.parse(await readFile(path.join(pluginRoot, ".ohmygame-plugin", "plugin.json"), "utf8")) as {
+  contributes: { tools: { name: string }[]; commands: { run: { native?: string } }[] };
+};
 
 /** Two players on one fake server: each sees who is on line, and a page reloaded keeps its seat. */
 function server(): GameRuntimeAdapter & { requests: PlaytestRequest[] } {
@@ -107,8 +110,9 @@ it("plays a multiplayer test through the app's host and bridge", { timeout: 60_0
     root: pluginRoot,
     entry: "dist/index.mjs",
     dataFolder: path.join(folder, ".data"),
-    tools: ["game_test"],
-    commands: ["state", "run", "cancel", "capture", "unitRun", "unitCancel"],
+    // What its manifest declares, as the app reads it: its tools, and the native commands it may register.
+    tools: manifest.contributes.tools.map((tool) => tool.name),
+    commands: manifest.contributes.commands.flatMap((command) => (command.run.native ? [command.run.native] : [])),
     projectTypes: [],
     game: true,
     hooks: [],
