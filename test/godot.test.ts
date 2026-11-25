@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, writeFile, mkdir, chmod } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { it } from "node:test";
+import { it, mock } from "node:test";
+// @ts-expect-error The plugin's native code is plain JavaScript.
+import { activate } from "../plugins/godot/native/index.mjs";
 import { crc32, deflateRawSync } from "node:zlib";
 // @ts-expect-error The plugin's native code is plain JavaScript.
 import { godotBuild, installWebTemplates, isSelfContained, templatesFolder, templatesProblem, templatesUrl } from "../plugins/godot/native/templates.mjs";
@@ -121,94 +123,53 @@ it("leaves nothing behind when a file is damaged, missing, or ranges aren't serv
   } finally { await rm(folder, { recursive: true, force: true }); }
 });
 
-it("runs the editor in a managed native session when the host has one", async () => {
-  // @ts-expect-error The plugin's native code is plain JavaScript.
-  const { activate } = await import("../plugins/godot/native/index.mjs");
-  const folder = await mkdtemp(path.join(tmpdir(), "godot-editor-"));
-  try {
-    const executable = path.join(folder, process.platform === "win32" ? "godot.exe" : "godot");
-    await writeFile(executable, "");
-    await chmod(executable, 0o755);
-    const commands = new Map<string, (input: unknown, call: unknown) => Promise<unknown>>();
-    let started: unknown;
-    let stopped = false;
-    await activate({
-      project: { folder },
-      registerProjectType() {},
-      registerTool() {},
-      registerCommand(name: string, handler: (input: unknown, call: unknown) => Promise<unknown>) {
-        commands.set(name, handler);
-      },
-      onDispose() {},
-      nativeSessions: {
-        async start(options: unknown) {
-          started = options;
-          return { id: "session", pid: 1234, label: "Godot", stop: async () => { stopped = true; }, exited: Promise.resolve({ code: 0, signal: null }) };
-        },
-      },
-    });
-    const result = await commands.get("runInGodot")!({}, { configuration: { godotPath: executable }, signal: new AbortController().signal });
-    assert.deepEqual(result, { started: true });
-    assert.deepEqual(started, { executable, args: ["--path", folder, "--editor"], cwd: folder, label: "Godot" });
-    assert.equal(stopped, false);
-  } finally { await rm(folder, { recursive: true, force: true }); }
+function editorCommand(
+  start?: (options: unknown) => Promise<{ stop: () => Promise<void> }>,
+  onDispose: (cleanup: () => void) => void = () => assert.fail("The host owns managed sessions"),
+) {
+  type Command = (input: unknown, call: unknown) => Promise<unknown>;
+  const commands = new Map<string, Command>();
+  activate({
+    project: { folder: tmpdir() },
+    registerProjectType() {},
+    registerTool() {},
+    registerCommand: (name: string, handler: Command) => commands.set(name, handler),
+    onDispose,
+    nativeSessions: start && { start },
+  });
+  return (signal = new AbortController().signal) =>
+    commands.get("runInGodot")!({}, { configuration: { godotPath: process.execPath }, signal });
+}
+
+it("launches the managed editor and propagates a rejected second launch", async () => {
+  const stop = mock.fn(async () => {});
+  const start = mock.fn(async (_options: unknown) => ({ stop }));
+  const run = editorCommand(start);
+  assert.deepEqual(await run(), { started: true });
+  assert.deepEqual(start.mock.calls[0]?.arguments, [{
+    executable: process.execPath, args: ["--path", tmpdir(), "--editor"], cwd: tmpdir(), label: "Godot",
+  }]);
+  const busy = new Error("already running");
+  start.mock.mockImplementation(async () => { throw busy; });
+  await assert.rejects(run(), (error) => error === busy);
+  assert.equal(stop.mock.callCount(), 0);
 });
 
 it("stops a managed session cancelled while it starts", async () => {
-  // @ts-expect-error The plugin's native code is plain JavaScript.
-  const { activate } = await import("../plugins/godot/native/index.mjs");
-  const folder = await mkdtemp(path.join(tmpdir(), "godot-editor-cancel-"));
-  try {
-    const executable = path.join(folder, process.platform === "win32" ? "godot.exe" : "godot");
-    await writeFile(executable, "");
-    await chmod(executable, 0o755);
-    const controller = new AbortController();
-    const commands = new Map<string, (input: unknown, call: unknown) => Promise<unknown>>();
-    let stopped = false;
-    await activate({
-      project: { folder },
-      registerProjectType() {},
-      registerTool() {},
-      registerCommand(name: string, handler: (input: unknown, call: unknown) => Promise<unknown>) {
-        commands.set(name, handler);
-      },
-      onDispose() {},
-      nativeSessions: {
-        async start() {
-          controller.abort();
-          return { id: "session", pid: 1234, label: "Godot", stop: async () => { stopped = true; }, exited: Promise.resolve({ code: 0, signal: null }) };
-        },
-      },
-    });
-    await assert.rejects(
-      commands.get("runInGodot")!({}, { configuration: { godotPath: executable }, signal: controller.signal }),
-      /Stopped/,
-    );
-    assert.equal(stopped, true);
-  } finally { await rm(folder, { recursive: true, force: true }); }
+  const controller = new AbortController();
+  const stop = mock.fn(async () => {});
+  const run = editorCommand(async () => {
+    controller.abort();
+    return { stop };
+  });
+  await assert.rejects(run(controller.signal), /Stopped/);
+  assert.equal(stop.mock.callCount(), 1);
 });
 
-it("keeps the older-host spawn fallback without claiming session ownership", async () => {
-  // @ts-expect-error The plugin's native code is plain JavaScript.
-  const { activate } = await import("../plugins/godot/native/index.mjs");
-  const folder = await mkdtemp(path.join(tmpdir(), "godot-editor-fallback-"));
-  try {
-    const commands = new Map<string, (input: unknown, call: unknown) => Promise<unknown>>();
-    let disposals = 0;
-    await activate({
-      project: { folder },
-      registerProjectType() {},
-      registerTool() {},
-      registerCommand(name: string, handler: (input: unknown, call: unknown) => Promise<unknown>) {
-        commands.set(name, handler);
-      },
-      onDispose() { disposals += 1; },
-    });
-    const result = await commands.get("runInGodot")!({}, {
-      configuration: { godotPath: process.execPath },
-      signal: new AbortController().signal,
-    });
-    assert.deepEqual(result, { started: true });
-    assert.equal(disposals, 1);
-  } finally { await rm(folder, { recursive: true, force: true }); }
+it("registers cleanup for the child it spawns on older hosts", async () => {
+  const onDispose = mock.fn((_cleanup: () => void) => {});
+  const run = editorCommand(undefined, onDispose);
+  assert.deepEqual(await run(), { started: true });
+  assert.equal(onDispose.mock.callCount(), 1);
+  onDispose.mock.calls[0]!.arguments[0]();
 });
