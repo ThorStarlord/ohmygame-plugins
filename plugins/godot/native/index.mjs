@@ -288,7 +288,6 @@ export function activate(context) {
       const session = await context.nativeSessions.start({
         executable,
         args,
-        cwd: project,
         label: "Godot",
       });
       // Cancelled while it started: the editor doesn't stay open.

@@ -147,7 +147,7 @@ it("launches the managed editor and propagates a rejected second launch", async 
   const run = editorCommand(start);
   assert.deepEqual(await run(), { started: true });
   assert.deepEqual(start.mock.calls[0]?.arguments, [{
-    executable: process.execPath, args: ["--path", tmpdir(), "--editor"], cwd: tmpdir(), label: "Godot",
+    executable: process.execPath, args: ["--path", tmpdir(), "--editor"], label: "Godot",
   }]);
   const busy = new Error("already running");
   start.mock.mockImplementation(async () => { throw busy; });
